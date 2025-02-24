@@ -15,7 +15,7 @@ log = "0.4"
 walkdir = "2"
 env_logger = "0.11"
 itertools = "0.13"
-plotly =  "0.8"
+plotly =  "0.12"
 clap = { version = "4.4.6", features = ["derive", "color"] }
 serde = { version = "1", default-features = false, features = ["derive"] }
 cggtts = { path = "../cggtts", version = "=4.2.0" }
