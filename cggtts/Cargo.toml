@@ -1,10 +1,11 @@
 [package]
 name = "cggtts"
 version = "4.2.0"
-license = "MIT OR Apache-2.0"
+license = "MPL-2.0"
 authors = ["Guillaume W. Bres <guillaume.bressaix@gmail.com>"]
 description = "Package to analyze and create CGGTTS data"
-homepage = "https://github.com/gwbres/cggtts"
+homepage = "https://github.com/rtk-rs"
+repository = "https://github.com/rtk-rs/cggtts"
 keywords = ["positionning","bipm","gnss","timing","satellites"]
 categories = ["science","parsing"]
 edition = "2018"
