@@ -1,5 +1,7 @@
+#![doc(html_logo_url = "https://raw.githubusercontent.com/rtk-rs/.github/master/logos/logo2.jpg")]
 #![doc = include_str!("../README.md")]
 #![cfg_attr(docsrs, feature(doc_cfg))]
+
 //! CGGTTS is the core structure, it comprises
 //! the list of tracks (measurements) and some header information.
 //! ```
@@ -114,6 +116,15 @@
 //! - secondary hardware info [IMS]
 //! - ionospheric parameter estimates
 //! - specify carrier dependent delays [see Delay]
+
+/*
+ * CGGTTS is part of the rtk-rs framework.
+ * Authors: Guillaume W. Bres <guillaume.bressaix@gmail.com> et al.
+ * (cf. https://github.com/rtk-rs/cggtts/graphs/contributors)
+ * This framework is shipped under Mozilla Public V2 license.
+ *
+ * Documentation: https://github.com/rtk-rs/cggtts
+ */
 
 mod crc;
 mod rcvr;
