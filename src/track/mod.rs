@@ -1,25 +1,18 @@
-use crate::crc::calc_crc;
-use thiserror::Error; //Error as CrcError};
-
-mod glonass;
-pub use glonass::GlonassChannel;
+use thiserror::Error;
 
 mod class;
+mod formatting;
+
 pub use class::CommonViewClass;
-
-#[cfg(feature = "scheduler")]
-#[cfg_attr(docsrs, doc(cfg(feature = "scheduler")))]
-mod scheduler;
-
-#[cfg(feature = "scheduler")]
-#[cfg_attr(docsrs, doc(cfg(feature = "scheduler")))]
-pub use scheduler::{FitData, SVTracker, Scheduler};
 
 use gnss::prelude::{Constellation, SV};
 use hifitime::{Duration, Epoch, Unit};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
+
+#[cfg(docsrs)]
+use crate::prelude::TimeScale;
 
 const TRACK_WITH_IONOSPHERIC: usize = 24;
 const TRACK_WITHOUT_IONOSPHERIC: usize = 21;
@@ -28,24 +21,27 @@ const TRACK_WITHOUT_IONOSPHERIC: usize = 21;
 #[derive(Debug, Default, PartialEq, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Track {
-    /// Common View Class (Single/Multi channel)
+    /// Common View Class
     pub class: CommonViewClass,
-    /// Epoch of this track
+    /// [Epoch] of this track
     pub epoch: Epoch,
-    /// Tracking duration
+    /// Tracking [Duration]
     pub duration: Duration,
     /// SV tracked during this realization
     pub sv: SV,
-    /// Elevation at track midpoint, expressed in degrees
-    pub elevation: f64,
-    /// Azimuth at track midpoint, expressed in degrees
-    pub azimuth: f64,
+    /// [SV] elevation in degrees (at track midpoint, in case of complex
+    /// track collection and fitting algorithm), in degrees.
+    pub elevation_deg: f64,
+    /// [SV] azimuth in degrees (at track midpoint, in case of complex
+    /// track collection and fitting algorithm), in degrees.
+    pub azimuth_deg: f64,
     /// Track data
     pub data: TrackData,
     /// Optionnal Ionospheric compensation terms
     pub iono: Option<IonosphericData>,
-    /// Glonass Channel Frequency [1:24], O for other GNSS
-    pub fr: GlonassChannel,
+    /// Glonass FDMA channel [1:24] that only applies to
+    /// [Track]s solved by tracking [Constellation::Glonass].
+    pub fdma_channel: Option<u8>,
     /// Hardware / receiver channel [0:99], 0 if Unknown
     pub hc: u8,
     /// Carrier frequency standard 3 letter code,
@@ -68,7 +64,7 @@ pub enum Error {
     #[error("missing \"{0}\" field")]
     MissingField(String),
     #[error("checksum error")]
-    CrcError(#[from] crate::crc::Error),
+    CrcError(#[from] crate::errors::CrcError),
 }
 
 /// Track data
@@ -119,16 +115,34 @@ pub struct IonosphericData {
 }
 
 impl Track {
-    /// Builds a new CGGTTS track. To follow CGGTTS guidelines,
-    /// it is important to use an Epoch expressed in UTC here.
-    /// For Glonass SV: prefer [Self::new_glonass_sv]
+    /// Builds a new CGGTTS [Track]. To follow CGGTTS guidelines,
+    /// it is important to use an [Epoch] expressed in [Timescale::UTC].
+    /// Prefer [Track::new_glonass] when working with [SV] from this constellation.
+    ///
+    /// ## Inputs
+    /// - sv: [SV] that was tracked
+    /// - utc_epoch: [Epoch] in [Timescale::UTC]
+    /// - class: [CommonViewClass] this new [Track] corresponds to
+    /// - elevation_deg: elevation (at mid point, in case of complex
+    /// track collection and fitting algorithm) in degrees
+    /// - azimuth_deg: azimuth (at mid point, in case of complex
+    /// track collection and fitting algorithm) in degrees
+    /// - data: actual [TrackData]
+    /// - ionosphere: possible [IonosphericData] compatible
+    /// with modern GNSS receivers
+    /// - rcvr_channel: (ideally) channel number used
+    /// by receiver when tracking this solution. Tie to "0"
+    /// when not known.
+    /// - frc: (ideally) RINEx like carrier/modulation frequency
+    /// code. For example "C1" would be (old) pseudo range on L1 frequency.
+    /// And "C1C" is the modern equivalent, that fully describe the modulation.
     pub fn new(
         sv: SV,
         utc_epoch: Epoch,
         duration: Duration,
         class: CommonViewClass,
-        elevation: f64,
-        azimuth: f64,
+        elevation_deg: f64,
+        azimuth_deg: f64,
         data: TrackData,
         iono: Option<IonosphericData>,
         rcvr_channel: u8,
@@ -139,28 +153,46 @@ impl Track {
             epoch: utc_epoch,
             class,
             duration,
-            elevation,
-            azimuth,
+            elevation_deg,
+            azimuth_deg,
             data,
             iono,
-            fr: GlonassChannel::Unknown,
+            fdma_channel: None,
             hc: rcvr_channel,
             frc: frc.to_string(),
         }
     }
-    /// Builds new CGGTTS track from single Glonass SV realization.
-    /// Epoch should be expressed in UTC.
+
+    /// Builds new CGGTTS [Track] from single Glonass SV realization.
+    /// Epoch should be expressed in UTC for this operation to be valid.
+    ///
+    /// ## Inputs
+    /// - sv: [SV] that was tracked
+    /// - utc_epoch: [Epoch] in [Timescale::UTC]
+    /// - class: [CommonViewClass] this new [Track] corresponds to
+    /// - elevation_deg: elevation (at mid point, in case of complex
+    /// track collection and fitting algorithm) in degrees
+    /// - azimuth_deg: azimuth (at mid point, in case of complex
+    /// track collection and fitting algorithm) in degrees
+    /// - data: actual [TrackData]
+    /// - ionosphere: possible [IonosphericData] compatible
+    /// with modern GNSS receivers
+    /// - fdma_channel: (ideally) FDMA channel used
+    /// in the tracking process. Should be > 0 and < 25 for correct CGGTTS.
+    /// - frc: (ideally) RINEx like carrier/modulation frequency
+    /// code. For example "C1" would be (old) pseudo range on L1 frequency.
+    /// And "C1C" is the modern equivalent, that fully describe the modulation.
     pub fn new_glonass(
         sv: SV,
         utc_epoch: Epoch,
         duration: Duration,
         class: CommonViewClass,
-        elevation: f64,
-        azimuth: f64,
+        elevation_deg: f64,
+        azimuth_deg: f64,
         data: TrackData,
         iono: Option<IonosphericData>,
         rcvr_channel: u8,
-        glo_channel: GlonassChannel,
+        fdma_channel: u8,
         frc: &str,
     ) -> Self {
         Self {
@@ -168,42 +200,52 @@ impl Track {
             epoch: utc_epoch,
             duration,
             class,
-            elevation,
-            azimuth,
+            elevation_deg,
+            azimuth_deg,
             data,
             iono,
-            fr: glo_channel,
+            fdma_channel: Some(fdma_channel),
             hc: rcvr_channel,
             frc: frc.to_string(),
         }
     }
-    /// Returns true if Self was measured against given `GNSS` Constellation
+
+    /// Returns true if this [Track]ed  the following [Constellation].
     pub fn uses_constellation(&self, c: Constellation) -> bool {
         self.sv.constellation == c
     }
-    /// Returns True if Self follows BIPM specifications / requirements,
-    /// in terms of tracking pursuit
-    pub fn follows_bipm_specs(&self) -> bool {
+
+    /// Returns True if this [Track] seems compatible with the [CommonViewPeriod]
+    /// recommended by BIPM. This cannot be a complete confirmation,
+    /// because only the receiver that generated this data knows
+    /// if the [Track] collection and fitting was implemented correctly.
+    pub fn follows_bipm_tracking(&self) -> bool {
         self.duration == Duration::from_seconds(780.0)
     }
-    /// Returns a `Track` with desired unique space vehicule
+
+    /// Returns a [Track] with desired [SV].
     pub fn with_sv(&self, sv: SV) -> Self {
         let mut t = self.clone();
         t.sv = sv;
         t
     }
-    /// Returns a track with desired elevation angle in Degrees
-    pub fn with_elevation(&self, elevation: f64) -> Self {
+
+    /// Returns a [Track] with desired elevation (at mid point in the fitting collection
+    /// algorithm), in degrees.
+    pub fn with_elevation_deg(&self, elevation_deg: f64) -> Self {
         let mut t = self.clone();
-        t.elevation = elevation;
+        t.elevation_deg = elevation_deg;
         t
     }
-    /// Returns a `Track` with given azimuth angle in Degrees, at tracking midpoint
-    pub fn with_azimuth(&self, azimuth: f64) -> Self {
+
+    /// Returns a [Track] with desired azimuth (at mid point in the fitting collection
+    /// algorithm), in degrees.
+    pub fn with_azimuth_deg(&self, azimuth_deg: f64) -> Self {
         let mut t = self.clone();
-        t.azimuth = azimuth;
+        t.azimuth_deg = azimuth_deg;
         t
     }
+
     /// Returns a `Track` with desired Frequency carrier code
     pub fn with_carrier_code(&self, code: &str) -> Self {
         let mut t = self.clone();
@@ -213,114 +255,6 @@ impl Track {
     /// Returns true if Self comes with Ionospheric parameter estimates
     pub fn has_ionospheric_data(&self) -> bool {
         self.iono.is_some()
-    }
-}
-
-fn cggtts_fmt<T: std::cmp::Ord + std::fmt::Display>(nb: T, sat: T, padding: usize) -> String {
-    format!("{:>padding$}", std::cmp::min(nb, sat))
-}
-
-fn cggtts_fmt_f64(nb: f64, scaling: f64, sat: i64, padding: usize) -> String {
-    let scaled = (nb * scaling).round() as i64;
-    if scaled.is_negative() {
-        format!("{:>padding$}", std::cmp::max(scaled, -sat / 10)) // remove 1 digit for sign
-    } else {
-        format!("{:>padding$}", std::cmp::min(scaled, sat))
-    }
-}
-
-impl std::fmt::Display for Track {
-    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let mut string = String::new();
-        string.push_str(&format!("{} {:X} ", self.sv, self.class));
-
-        string.push_str(&format!(
-            "{} ",
-            cggtts_fmt_f64(self.epoch.to_mjd_utc_days().floor(), 1.0, 99999, 5)
-        ));
-
-        let (_, _, _, h, m, s, _) = self.epoch.to_gregorian_utc();
-        string.push_str(&format!("{:02}{:02}{:02} ", h, m, s));
-
-        string.push_str(&format!(
-            "{} ",
-            cggtts_fmt(self.duration.to_seconds() as u64, 9999, 4)
-        ));
-
-        string.push_str(&format!(
-            "{} ",
-            cggtts_fmt_f64(self.elevation, 10.0, 999, 3)
-        ));
-
-        string.push_str(&format!("{} ", cggtts_fmt_f64(self.azimuth, 10.0, 9999, 4)));
-
-        string.push_str(&format!(
-            "{} ",
-            cggtts_fmt_f64(self.data.refsv, 1E10, 99_999_999_999, 11)
-        ));
-
-        string.push_str(&format!(
-            "{} ",
-            cggtts_fmt_f64(self.data.srsv, 1E13, 999_999, 6)
-        ));
-
-        string.push_str(&format!(
-            "{} ",
-            cggtts_fmt_f64(self.data.refsys, 1E10, 99_999_999_999, 11)
-        ));
-
-        string.push_str(&format!(
-            "{} ",
-            cggtts_fmt_f64(self.data.srsys, 1E13, 999_999, 6)
-        ));
-
-        string.push_str(&format!(
-            "{} ",
-            cggtts_fmt_f64(self.data.dsg, 1E10, 9_999, 4)
-        ));
-
-        string.push_str(&format!("{} ", cggtts_fmt(self.data.ioe, 999, 3)));
-
-        string.push_str(&format!(
-            "{} ",
-            cggtts_fmt_f64(self.data.mdtr, 1E10, 9_999, 4)
-        ));
-
-        string.push_str(&format!(
-            "{} ",
-            cggtts_fmt_f64(self.data.smdt, 1E13, 9_999, 4)
-        ));
-
-        string.push_str(&format!(
-            "{} ",
-            cggtts_fmt_f64(self.data.mdio, 1E10, 9_999, 4)
-        ));
-
-        string.push_str(&format!(
-            "{} ",
-            cggtts_fmt_f64(self.data.smdi, 1E13, 9_999, 4)
-        ));
-
-        if let Some(iono) = self.iono {
-            string.push_str(&format!(
-                "{} {} {} ",
-                cggtts_fmt_f64(iono.msio, 1E10, 9_999, 4),
-                cggtts_fmt_f64(iono.smsi, 1E13, 999_999, 6),
-                cggtts_fmt_f64(iono.isg, 1E10, 9_999, 4),
-            ));
-        }
-
-        string.push_str(&format!("{:02} {:02} {}", self.fr, self.hc, self.frc));
-
-        let crc = calc_crc(&string);
-        if crc.is_err() {
-            panic!("failed to calculate line CRC: {}", crc.err().unwrap());
-        }
-
-        let crc = crc.unwrap();
-        string.push_str(&format!(" {:02X}", crc)); //crc.wrapping_add(32)));
-
-        fmt.write_str(&string)
     }
 }
 
@@ -508,14 +442,14 @@ impl std::str::FromStr for Track {
                 .map_err(|_| Error::FieldParsing(String::from("STTIME")))?,
         );
 
-        let elevation = items
+        let elevation_deg = items
             .next()
             .ok_or(Error::MissingField(String::from("ELV")))?
             .parse::<f64>()
             .map_err(|_| Error::FieldParsing(String::from("ELV")))?
             * 0.1;
 
-        let azimuth = items
+        let azimuth_deg = items
             .next()
             .ok_or(Error::MissingField(String::from("AZTH")))?
             .parse::<f64>()
@@ -530,11 +464,11 @@ impl std::str::FromStr for Track {
             },
         };
 
-        let fr = GlonassChannel::from_str(
-            items
-                .next()
-                .ok_or(Error::MissingField(String::from("fr")))?,
-        )?;
+        let fr = items
+            .next()
+            .ok_or(Error::MissingField(String::from("fr")))?
+            .parse::<u8>()
+            .map_err(|_| Error::FieldParsing(String::from("fr")))?;
 
         let hc = items
             .next()
@@ -569,13 +503,13 @@ impl std::str::FromStr for Track {
             class,
             epoch,
             duration,
-            elevation,
-            azimuth,
+            elevation_deg,
+            azimuth_deg,
             data,
             iono,
-            fr,
             hc,
             frc,
+            fdma_channel: if fr == 0 { None } else { Some(fr) },
         })
     }
 }
@@ -583,25 +517,9 @@ impl std::str::FromStr for Track {
 #[cfg(test)]
 mod tests {
     use crate::prelude::*;
-    use crate::track::GlonassChannel;
     use gnss::prelude::{Constellation, SV};
     use hifitime::Duration;
     use std::str::FromStr;
-    //use cggtts::prelude::IonosphericData;
-    //use cggtts::prelude::CommonViewClass;
-    //use cggtts::prelude::Track;
-    #[test]
-    fn test_glonass_channel() {
-        let c = GlonassChannel::Unknown;
-        assert_eq!(c.to_string(), "00");
-        let c = GlonassChannel::ChanNum(1);
-        assert_eq!(c.to_string(), "01");
-        let c = GlonassChannel::ChanNum(10);
-        assert_eq!(c.to_string(), "0A");
-        assert_eq!(c, GlonassChannel::ChanNum(10));
-        assert!(c != GlonassChannel::Unknown);
-        assert_eq!(GlonassChannel::default(), GlonassChannel::Unknown);
-    }
     #[test]
     fn track_parsing() {
         let content =
@@ -617,12 +535,12 @@ mod tests {
             }
         );
         assert_eq!(track.class, CommonViewClass::SingleChannel);
-        assert!(track.follows_bipm_specs());
+        assert!(track.follows_bipm_tracking());
         assert_eq!(track.duration, Duration::from_seconds(780.0));
         assert!(!track.has_ionospheric_data());
-        assert_eq!(track.elevation, 9.9);
-        assert_eq!(track.azimuth, 9.9);
-        assert_eq!(track.fr, GlonassChannel::Unknown);
+        assert_eq!(track.elevation_deg, 9.9);
+        assert_eq!(track.azimuth_deg, 9.9);
+        assert!(track.fdma_channel.is_none());
         assert!((track.data.dsg - 2.5E-9).abs() < 1E-6);
         assert!((track.data.srsys - 2.83E-11).abs() < 1E-6);
         assert_eq!(track.hc, 0);
@@ -641,12 +559,12 @@ mod tests {
             }
         );
         assert_eq!(track.class, CommonViewClass::SingleChannel);
-        assert!(track.follows_bipm_specs());
+        assert!(track.follows_bipm_tracking());
         assert_eq!(track.duration, Duration::from_seconds(780.0));
         assert!(!track.has_ionospheric_data());
-        assert_eq!(track.elevation, 9.9);
-        assert_eq!(track.azimuth, 9.9);
-        assert_eq!(track.fr, GlonassChannel::Unknown);
+        assert_eq!(track.elevation_deg, 9.9);
+        assert_eq!(track.azimuth_deg, 9.9);
+        assert!(track.fdma_channel.is_none());
         assert_eq!(track.hc, 0);
         assert_eq!(track.frc, "L1C");
 
@@ -656,12 +574,12 @@ mod tests {
         assert!(track.is_ok());
         let track = track.unwrap();
         assert_eq!(track.class, CommonViewClass::SingleChannel);
-        assert!(track.follows_bipm_specs());
+        assert!(track.follows_bipm_tracking());
         assert_eq!(track.duration, Duration::from_seconds(780.0));
         assert!(!track.has_ionospheric_data());
-        assert_eq!(track.elevation, 9.9);
-        assert_eq!(track.azimuth, 9.9);
-        assert_eq!(track.fr, GlonassChannel::Unknown);
+        assert_eq!(track.elevation_deg, 9.9);
+        assert_eq!(track.azimuth_deg, 9.9);
+        assert!(track.fdma_channel.is_none());
         assert_eq!(track.hc, 0);
         assert_eq!(track.frc, "L1C");
 
@@ -679,15 +597,16 @@ mod tests {
         );
         assert_eq!(track.class, CommonViewClass::SingleChannel);
         //assert_eq!(track.trktime 043400)
-        assert!(track.follows_bipm_specs());
+        assert!(track.follows_bipm_tracking());
         assert_eq!(track.duration, Duration::from_seconds(780.0));
         assert!(!track.has_ionospheric_data());
-        assert_eq!(track.elevation, 9.9);
-        assert_eq!(track.azimuth, 9.9);
-        assert_eq!(track.fr, GlonassChannel::Unknown);
+        assert_eq!(track.elevation_deg, 9.9);
+        assert_eq!(track.azimuth_deg, 9.9);
+        assert!(track.fdma_channel.is_none());
         assert_eq!(track.hc, 0);
         assert_eq!(track.frc, "L1C");
     }
+
     #[test]
     fn parser_ionospheric() {
         let content =
@@ -696,16 +615,16 @@ mod tests {
         //assert_eq!(track.is_ok(), true);
         let track = track.unwrap();
         assert_eq!(track.class, CommonViewClass::MultiChannel);
-        assert!(track.follows_bipm_specs());
+        assert!(track.follows_bipm_tracking());
         assert_eq!(track.duration, Duration::from_seconds(780.0));
         assert!(track.has_ionospheric_data());
         let iono = track.iono.unwrap();
         assert_eq!(iono.msio, 23.0E-10);
         assert_eq!(iono.smsi, -1.0E-13);
         assert_eq!(iono.isg, 29.0E-10);
-        assert_eq!(track.elevation, 34.7);
-        assert!((track.azimuth - 39.4).abs() < 1E-6);
-        assert_eq!(track.fr, GlonassChannel::ChanNum(2));
+        assert_eq!(track.elevation_deg, 34.7);
+        assert!((track.azimuth_deg - 39.4).abs() < 1E-6);
+        assert_eq!(track.fdma_channel, Some(2));
         assert_eq!(track.hc, 0);
         assert_eq!(track.frc, "L3P");
     }
