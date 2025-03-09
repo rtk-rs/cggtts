@@ -34,12 +34,6 @@ jobs:
         command: fmt
         args: --all -- --check
     
-    - name: Audit
-      continue-on-error: true
-      run: |
-        cargo install cargo-audit
-        cargo audit
-    
     - uses: actions-rs/cargo@v1
       name: Build
       with:
