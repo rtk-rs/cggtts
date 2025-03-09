@@ -67,7 +67,7 @@ Use CGGTTS to parse local files
 ```rust
 use cggtts::prelude::CGGTTS;
 
-let cggtts = CGGTTS::from_file("data/GZGTR560.258");
+let cggtts = CGGTTS::from_file("data/CGGTTS/GZGTR560.258");
 assert!(cggtts.is_ok());
 
 let cggtts = cggtts.unwrap();

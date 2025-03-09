@@ -7,35 +7,23 @@
 //! ```
 //! use cggtts::CGGTTS;
 //! fn main() {
-//!     let cggtts = CGGTTS::from_file("data/CGGTTS/GZSY8259.506")
+//!     let cggtts = CGGTTS::from_file("data/CGGTTS/EZGTR60.258")
 //!         .unwrap();
-//!     assert_eq!(cggtts.station, "SY82");
+//!     assert_eq!(cggtts.station, "LAB");
 //!     assert_eq!(cggtts.follows_bipm_specs(), true);
+//!
 //!     if let Some(track) = cggtts.tracks.first() {
 //!         let duration = track.duration;
 //!         let (refsys, srsys) = (track.data.refsys, track.data.srsys);
-//!         assert_eq!(track.has_ionospheric_data(), false);
 //!         assert_eq!(track.follows_bipm_specs(), true);
-//!     }
-//! }
-//! ```
-//!
-//! # Advanced CGGTTS
-//! Comes with ionospheric parameters estimates
-//!
-//!```
-//! use cggtts::CGGTTS;
-//! fn main() {
-//!     let cggtts = CGGTTS::from_file("data/CGGTTS/RZSY8257.000")
-//!         .unwrap();
-//!     if let Some(track) = cggtts.tracks.first() {
 //!         assert_eq!(track.has_ionospheric_data(), true);
+//!
 //!         if let Some(iono) = track.iono {
 //!             let (msio, smsi, isg) = (iono.msio, iono.smsi, iono.isg);
 //!         }
 //!     }
 //! }
-//!```
+//! ```
 //!
 //! # CGGTTS production
 //! Use `to_string` to dump CGGTTS data
