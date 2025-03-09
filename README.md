@@ -51,3 +51,26 @@ so they share the same production parameters at all times.
 ## System Time delays
 
 A built in API allows accurate system delay description as defined in CGGTTS.
+
+## Getting started
+
+This library only supports revision **2E**, and will _reject_ other revisions.
+
+Add "cggtts" to your Cargo.toml
+
+```toml
+cggtts = "4"
+```
+
+Use CGGTTS to parse local files
+
+```rust
+use cggtts::prelude::CGGTTS;
+
+let cggtts = CGGTTS::from_file("data/GZGTR560.258");
+assert!(cggtts.is_ok());
+
+let cggtts = cggtts.unwrap();
+assert_eq!(cggtts.station, "LAB");
+assert_eq!(cggtts.tracks.len(), 2097);
+```
