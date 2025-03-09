@@ -1,4 +1,4 @@
-name: Rust
+name: CI
 
 on:
   push:
@@ -12,8 +12,8 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  lint:
-    name: Linter 
+  build:
+    name: Build
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
@@ -23,69 +23,38 @@ jobs:
         toolchain: stable
         override: true
         components: rustfmt, clippy 
+
     - uses: actions-rs/cargo@v1
       name: Linter 
       with:
         command: fmt
         args: --all -- --check
+    
     - name: Audit
       continue-on-error: true
       run: |
         cargo install cargo-audit
         cargo audit
-
-  tests:
-    name: Tests 
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v3
-    - uses: actions-rs/toolchain@v1
-      name: Install Rust
+    
+    - uses: actions-rs/cargo@v1
+      name: Build
       with:
-        toolchain: stable
-        override: true
+        command: build
+    
     - uses: actions-rs/cargo@v1
       name: Test
       with:
         command: test
         args: --verbose
+    
+    - uses: actions-rs/cargo@v1
+      name: Build (all features)
+      with:
+        command: build
+        args: --all-features
+
     - uses: actions-rs/cargo@v1
       name: Test (all features)
       with:
         command: test
         args: --verbose --all-features
-  
-  build-ws:
-    name: Build Windows
-    runs-on: windows-latest
-    steps:
-    - uses: actions/checkout@v2
-    - name: Build
-      run: cargo build --all-features --release --verbose
-  
-  build-mac:
-    name: Build Mac-OS
-    runs-on: macos-latest
-    steps:
-    - uses: actions/checkout@v2
-    - name: Build
-      run: cargo build --all-features --release --verbose
-  
-  publish:
-    name: Publish Library
-    runs-on: ubuntu-latest
-    needs: [lint, tests, build-ws, build-mac]
-    if: github.ref_type == 'tag'
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Install stable toolchain
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: stable
-      - name: Publish
-        env:
-          TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
-        run: |
-          cargo login $TOKEN
-          cargo publish -p cggtts
