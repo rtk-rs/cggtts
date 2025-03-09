@@ -1,2 +1,45 @@
-[workspace]
-members = ["cggtts", "cggtts-cli"]
+[package]
+name = "cggtts"
+version = "4.2.0"
+license = "MPL-2.0"
+authors = ["Guillaume W. Bres <guillaume.bressaix@gmail.com>"]
+description = "CGGTTS data parsing and synthesis"
+homepage = "https://github.com/rtk-rs"
+repository = "https://github.com/rtk-rs/cggtts"
+keywords = ["geo", "gnss", "timing", "gps"]
+categories = ["science", "science:geo", "parsing"]
+edition = "2018"
+readme = "../README.md"
+exclude = [
+    "data/*",
+]
+
+[features]
+default = [] # no features by default
+
+# Unlock common view period definitions and scheduling
+scheduler = []
+
+# Satellite tracker and fit method
+tracker = ["polyfit-rs"]
+
+[dependencies]
+thiserror = "2"
+scan_fmt = "0.1.3"
+strum = "0.27"
+itertools = "0.14"
+strum_macros = "0.27"
+flate2 = { version = "1", optional = true }
+serde = { version = "1.0", optional = true, features = ["derive"] }
+gnss-rs = { version = "2.3.5", features = ["serde"] }
+hifitime = { version = "4.0", features = ["serde", "std"] }
+
+# track scheduling
+polyfit-rs = { version = "0.2", optional = true }
+
+[dev-dependencies]
+rand = "0.8"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docrs", "--generate-link-to-definition"]

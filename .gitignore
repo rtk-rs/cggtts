@@ -1,7 +1,6 @@
 target/
-data/
 Cargo.lock
 *.swo
 *.swp
-cggtts/test.txt
 *.html
+test.txt
