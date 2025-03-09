@@ -1,14 +1,6 @@
 //! Common View Planification table
-
-use crate::prelude::CommonViewPeriod;
-
-use hifitime::{
-    errors::HifitimeError,
-    prelude::{Duration, Epoch, TimeScale, Unit},
-};
-
-use crate::scheduler::period::{BIPM_REFERENCE_MJD, BIPM_SETUP_DURATION_SECONDS};
-
+use crate::scheduler::period::{CommonViewPeriod, BIPM_REFERENCE_MJD};
+use hifitime::prelude::{Duration, Epoch, TimeScale, Unit};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -37,11 +29,6 @@ pub struct CommonViewCalendar {
 }
 
 impl CommonViewCalendar {
-    /// Returns "now" (system time) expressed in [TimeScale::UTC].
-    fn now_utc() -> Result<Epoch, HifitimeError> {
-        Ok(Epoch::now()?.to_time_scale(TimeScale::UTC))
-    }
-
     /// Design a new [CommonViewCalendar] (planification table).
     ///
     /// ## Input
@@ -139,6 +126,11 @@ impl CommonViewCalendar {
         s
     }
 
+    /// Returns true if a daily offset is defined
+    fn has_daily_offset(&self) -> bool {
+        self.daily_offset != Duration::ZERO
+    }
+
     // Returns offset (in nanoseconds) of the i-th CV period starting point
     // for that MJD.
     fn period_start_offset_nanos(&self, mjd: u32, ith: u16) -> i128 {
@@ -166,14 +158,88 @@ impl CommonViewCalendar {
         offset_nanos
     }
 
-    /// Returns true if a daily offset is defined
-    fn has_daily_offset(&self) -> bool {
-        self.daily_offset != Duration::ZERO
-    }
-
     // Returns daily offset (in nanoseconds) of the very first period of that MJD.
     fn first_start_offset_nanos(&self, mjd: u32) -> i128 {
         self.period_start_offset_nanos(mjd, 0)
+    }
+
+    /// Returns datetime (as [Epoch]) of next [CommonViewPeriod] after
+    /// specified [Epoch]. Although CGGTTS is scheduled in and aligned
+    /// to [TimeScale::UTC], we tolerate other timescales here.
+    pub fn next_period_start_after(&self, t: Epoch) -> Epoch {
+        let ts = t.time_scale;
+        let utc = ts == TimeScale::UTC;
+        let period_duration = self.period.total_duration();
+
+        let t_utc = if utc {
+            t
+        } else {
+            t.to_time_scale(TimeScale::UTC)
+        };
+
+        // determine time to next midnight
+        let mjd = t_utc.to_mjd_utc_days().floor() as u32;
+
+        let mjd_midnight = Epoch::from_mjd_utc(mjd as f64);
+        let mjd_next_midnight = Epoch::from_mjd_utc((mjd + 1) as f64);
+        let time_to_midnight = mjd_next_midnight - mjd_midnight;
+
+        let t_utc = if time_to_midnight < period_duration {
+            // we're inside the last track of that day
+            // simply return T0 of MJD+1
+            let t0_offset_nanos = self.first_start_offset_nanos(mjd + 1) as f64;
+            Epoch::from_duration(t0_offset_nanos * Unit::Nanosecond, TimeScale::UTC)
+        } else {
+            // offset of first period of that day
+            let offset_nanos = self.first_start_offset_nanos(mjd) as f64;
+            let t0_utc = mjd_midnight + offset_nanos * Unit::Nanosecond;
+
+            // determine track number this "t" contributes to
+            let i = (t_utc - t0_utc).total_nanoseconds() / period_duration.total_nanoseconds();
+
+            println!("ith={}", i);
+
+            if t_utc < t0_utc {
+                // on first track of day, we only have the daily offset
+                t0_utc
+            } else {
+                t0_utc + ((i + 1) * period_duration.total_nanoseconds()) as f64 * Unit::Nanosecond
+            }
+        };
+
+        if utc {
+            t_utc
+        } else {
+            t_utc.to_time_scale(ts)
+        }
+    }
+
+    /// Returns datetime (as [Epoch]) of next active data collection
+    /// after specified [Epoch]. Although CGGTTS is scheduled in and aligned
+    /// to [TimeScale::UTC], we tolerate other timescales here.
+    pub fn next_data_collection_after(&self, t: Epoch) -> Epoch {
+        let mut next_t = self.next_period_start_after(t);
+        if self.period.setup_duration == Duration::ZERO {
+            next_t += self.period.setup_duration;
+        }
+        next_t
+    }
+
+    /// Returns remaining time (as [Duration]) until start of next
+    /// [CommonViewPeriod] after specified [Epoch].
+    pub fn time_to_next_start(&self, t: Epoch) -> Duration {
+        let next_start = self.next_period_start_after(t);
+        t - next_start
+    }
+
+    /// Returns remaining time (as [Duration]) until start of next
+    /// active data collection, after specified [Epoch].
+    pub fn time_to_next_data_collection(&self, t: Epoch) -> Duration {
+        let mut dt = self.time_to_next_start(t);
+        if self.period.setup_duration == Duration::ZERO {
+            dt += self.period.setup_duration;
+        }
+        dt
     }
 }
 
@@ -181,11 +247,8 @@ impl CommonViewCalendar {
 mod test {
 
     use crate::{
-        prelude::Epoch,
-        scheduler::{
-            calendar::CommonViewCalendar,
-            period::{CommonViewPeriod, BIPM_REFERENCE_MJD},
-        },
+        prelude::{Duration, Epoch},
+        scheduler::{calendar::CommonViewCalendar, period::BIPM_REFERENCE_MJD},
     };
 
     #[test]
@@ -279,6 +342,90 @@ mod test {
                 t0_nanos,
                 "failed for mdj={}",
                 mjd,
+            );
+        }
+
+        // Test a few verified values
+        for (i, (t, expected)) in [
+            (
+                Epoch::from_mjd_utc(50_722.0),
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0),
+            ),
+            (
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(1.0),
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0),
+            ),
+            (
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(2.0),
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0),
+            ),
+            (
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(10.0),
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0),
+            ),
+            // TODO
+            // (
+            //     Epoch::from_mjd_utc(50_722.0) - Duration::from_seconds(10.0),
+            //     Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0),
+            // ),
+            (
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(119.0),
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0),
+            ),
+            (
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0),
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0 + 960.0),
+            ),
+            (
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(121.0),
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0 + 960.0),
+            ),
+            (
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0 + 959.0),
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0 + 960.0),
+            ),
+            (
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0 + 960.0),
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0 + 2.0 * 960.0),
+            ),
+            (
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0 + 961.0),
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0 + 2.0 * 960.0),
+            ),
+            (
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0 + 2.0 * 960.0 - 1.0),
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0 + 2.0 * 960.0),
+            ),
+            (
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0 + 2.0 * 960.0),
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0 + 3.0 * 960.0),
+            ),
+            (
+                Epoch::from_mjd_utc(59_506.0),
+                Epoch::from_mjd_utc(59_506.0) + Duration::from_seconds(2.0 * 60.0),
+            ),
+            (
+                Epoch::from_mjd_utc(59_507.0),
+                Epoch::from_mjd_utc(59_507.0) + Duration::from_seconds(14.0 * 60.0),
+            ),
+            (
+                Epoch::from_mjd_utc(59_508.0),
+                Epoch::from_mjd_utc(59_508.0) + Duration::from_seconds(10.0 * 60.0),
+            ),
+            (
+                Epoch::from_mjd_utc(59_509.0),
+                Epoch::from_mjd_utc(59_509.0) + Duration::from_seconds(6.0 * 60.0),
+            ),
+        ]
+        .iter()
+        .enumerate()
+        {
+            assert_eq!(
+                calendar.next_period_start_after(*t),
+                *expected,
+                "failed for i={}/t={:?}",
+                i,
+                t
             );
         }
     }
