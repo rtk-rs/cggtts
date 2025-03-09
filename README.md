@@ -21,23 +21,10 @@ CGGTTS is specified by the Bureau International des Poids & des Mesures (BIPM):
 
 This library only supports revision **2E**, and will _reject_ other revisions.
 
-## Set of tools
+## Features
 
-- `cggtts` is the main library. Compile it with the _scheduler_ option to unlock
-full support of CGGTTS data production
-- `cggtts-cli` is an application to analyze one or compare two CGGTTS files.  
-Download its latest release from the [github portal](https://github.com/rtk-rs/cggtts/releases).
-
-## Ecosystem
-
-The CGGTTS solutions solver that is integrated to [the RINEX toolbox](https://github.com/georust/rinex)
-is the _goto_ application to generate CGGTTS files from all this framework.  
-
-The [RINEX Wiki pages](https://github.com/georust/rinex/wiki/CGGTTS) explain how you can resolve CGGTTS solutions
-using this toolbox.
-
-This crate heavily relies on `Hifitime` for accurate _Epoch_ representation
-and _Timescales_ knowledge. Check out Christopher's amazing libraries [right here](https://github.com/nyx-space/hifitime).
+- `serdes`
+- `scheduler`: unlock CGGTS track scheduling
 
 ## CGGTTS track scheduling
 
@@ -55,7 +42,3 @@ so they share the same production parameters at all times.
 ## System Time delays
 
 A built in API allows accurate system delay description as defined in CGGTTS.
-
-## CGGTTS-CLI
-
-[A command line application](gnss_cli/README.md) is developed to process one or two CGGTTS file for clock comparison.
