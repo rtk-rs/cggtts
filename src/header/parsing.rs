@@ -294,9 +294,9 @@ impl Header {
                     _ => return Err(ParsingError::ChecksumFormat),
                 };
 
-                // if value != crc {
-                //     return Err(ParsingError::ChecksumValue);
-                // }
+                if value != crc {
+                    return Err(ParsingError::ChecksumValue);
+                }
 
                 // CKSUM initiates the end of header section
                 blank = true;
