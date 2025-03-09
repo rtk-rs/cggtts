@@ -7,7 +7,7 @@
 //! ```
 //! use cggtts::CGGTTS;
 //! fn main() {
-//!     let cggtts = CGGTTS::from_file("../data/single/GZSY8259.506")
+//!     let cggtts = CGGTTS::from_file("data/CGGTTS/GZSY8259.506")
 //!         .unwrap();
 //!     assert_eq!(cggtts.station, "SY82");
 //!     assert_eq!(cggtts.follows_bipm_specs(), true);
@@ -26,7 +26,7 @@
 //!```
 //! use cggtts::CGGTTS;
 //! fn main() {
-//!     let cggtts = CGGTTS::from_file("../data/dual/RZSY8257.000")
+//!     let cggtts = CGGTTS::from_file("data/CGGTTS/RZSY8257.000")
 //!         .unwrap();
 //!     if let Some(track) = cggtts.tracks.first() {
 //!         assert_eq!(track.has_ionospheric_data(), true);
