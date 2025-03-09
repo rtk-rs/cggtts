@@ -32,9 +32,9 @@ use flate2::{read::GzDecoder, write::GzEncoder, Compression as GzCompression};
 
 mod header;
 
-#[cfg(feature = "cv")]
-#[cfg_attr(docsrs, doc(cfg(feature = "cv")))]
-mod cv;
+#[cfg(feature = "scheduler")]
+#[cfg_attr(docsrs, doc(cfg(feature = "scheduler")))]
+mod scheduler;
 
 #[cfg(test)]
 mod tests;
@@ -56,8 +56,8 @@ pub mod prelude {
         CGGTTS,
     };
 
-    #[cfg(feature = "cv")]
-    pub use crate::cv::{calendar::CommonViewCalendar, period::CommonViewPeriod};
+    #[cfg(feature = "scheduler")]
+    pub use crate::scheduler::period::CommonViewPeriod;
 
     // #[cfg(feature = "scheduler")]
     // #[cfg_attr(docsrs, doc(cfg(feature = "scheduler")))]
@@ -545,7 +545,7 @@ impl CGGTTS {
         self.header.format(writer, &mut buf)?;
 
         // BLANK at end of header section
-        write!(writer, "{}", '\n')?;
+        write!(writer, "\n")?;
 
         // format track labels
         if self.has_ionospheric_data() {
@@ -559,7 +559,7 @@ impl CGGTTS {
         // format all tracks
         for track in self.tracks.iter() {
             track.format(writer, &mut buf)?;
-            write!(writer, "{}", '\n')?;
+            write!(writer, "\n")?;
         }
 
         Ok(())
