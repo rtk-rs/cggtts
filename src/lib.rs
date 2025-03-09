@@ -57,7 +57,7 @@ pub mod prelude {
     };
 
     #[cfg(feature = "scheduler")]
-    pub use crate::scheduler::period::CommonViewPeriod;
+    pub use crate::scheduler::{calendar::CommonViewCalendar, period::CommonViewPeriod};
 
     // #[cfg(feature = "scheduler")]
     // #[cfg_attr(docsrs, doc(cfg(feature = "scheduler")))]

@@ -2,13 +2,13 @@
 use crate::prelude::Duration;
 
 /// Standard setup duration (in seconds), as per BIPM specifications.
-const BIPM_SETUP_DURATION_SECONDS: u32 = 180;
+pub(crate) const BIPM_SETUP_DURATION_SECONDS: u32 = 180;
 
 /// Standard tracking duration (in seconds), as per BIPM specifications
 const BIPM_TRACKING_DURATION_SECONDS: u32 = 780;
 
 /// Reference MJD used in Common View tracking
-pub(crate) const REFERENCE_MJD: u32 = 50_722;
+pub(crate) const BIPM_REFERENCE_MJD: u32 = 50_722;
 
 /// [CommonViewPeriod] describes the period of satellite
 /// tracking and common view realizations.

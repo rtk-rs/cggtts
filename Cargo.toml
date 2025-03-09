@@ -20,8 +20,8 @@ default = [] # no features by default
 # Unlock common view period definitions and scheduling
 scheduler = []
 
-# Unlock CGGTTS track fitting
-track-fit = ["polyfit-rs"]
+# Satellite tracker and fit method
+tracker = ["polyfit-rs"]
 
 [dependencies]
 thiserror = "2"
