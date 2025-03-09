@@ -1,10 +1,9 @@
-//! Satellite tracking utilities
-
+//! Satellite track fitting
 use polyfit_rs::polyfit_rs::polyfit;
-use std::collections::HashMap;
 use thiserror::Error;
 
-use crate::prelude::{Duration, Epoch, IonosphericData, TimeScale, TrackData, SV};
+use crate::prelude::{Duration, Epoch, FittedData, IonosphericData, TrackData, SV};
+
 use std::collections::BTreeMap;
 
 fn linear_reg_2d(i: (f64, f64), j: (f64, f64)) -> (f64, f64) {
@@ -18,6 +17,9 @@ fn linear_reg_2d(i: (f64, f64), j: (f64, f64)) -> (f64, f64) {
 /// CGGTTS track formation errors
 #[derive(Debug, Clone, Error)]
 pub enum FitError {
+    /// At least two symbols are required to fit
+    #[error("track fitting requires at least 2 observations")]
+    NotEnoughSymbols,
     /// Linear regression failure. Either extreme values
     /// encountered or data gaps are present.
     #[error("linear regression failure")]
@@ -35,27 +37,24 @@ pub enum FitError {
     NotCenteredOnTrackMidpoint,
 }
 
-/// SkyTracker is used to track all Satellite vehicles
-/// in sight during a [CommonViewPeriod] and eventually collect [CGGTTS].
-#[derive(Default, Debug, Clone)]
-pub struct SkyTracker {
-    /// Internal buffer
-    sv_trackers: HashMap<SV, SVTracker>,
-}
-
+/// [SVTracker] is used to track an individual [SV].
 #[derive(Default, Debug, Clone)]
 pub struct SVTracker {
-    /// Internal buffer.
-    // Using BTreeMap actually makes this tolerant
-    // to sampling in non chronological and chaotic order..
-    // We only require steady sampling in the whole period.
-    buffer: BTreeMap<Epoch, FitData>,
+    /// SV being tracked
+    sv: SV,
+    /// Symbols counter
+    size: usize,
+    /// Sampling gap tolerance
+    gap_tolerance: Option<Duration>,
+    /// Internal buffer
+    buffer: Vec<Observation>,
 }
 
-/// [FitData] needs to be evenly sampled during a [CommonViewPeriod]
-/// by [SVTracker] to possibly fit a [Track].
+/// [Observation] you need to provide to attempt a CGGTTS fit.
 #[derive(Debug, Default, Clone)]
-pub struct FitData {
+pub struct Observation {
+    /// Epoch of [Observation]
+    pub epoch: Epoch,
     /// Satellite onboard clock offset to local clock
     pub refsv: f64,
     /// Satellite onboard clock offset to timescale
@@ -73,27 +72,38 @@ pub struct FitData {
 }
 
 impl SVTracker {
-    /// True if MSIO field is present
-    fn has_msio(&self) -> bool {
-        self.buffer
-            .values()
-            .filter(|data| data.msio.is_some())
-            .count()
-            > 0
+    /// Creates (allocates) a new [SVTracker] for that particular satellite.
+    ///
+    /// ## Input
+    /// - satellite: as [SV]
+    /// - tolerance: sampling gap tolerance as [Duration] 
+    pub fn new(sv: SV, gap_tolerance: Option<Duration>) -> Self {
+        Self {
+            sv,
+            size: 0,
+            gap_tolerance,
+            last_epoch: None,
+            buffer: Vec::with_capacity(16),
+        }
     }
 
-    /// Try to fit a track. You need to provide the ongoing IOE.
+    /// Track fitting attempt.
     pub fn fit(
         &self,
-        ioe: u16,
         trk_duration: Duration,
         sampling_period: Duration,
         trk_midpoint: Epoch,
     ) -> Result<((f64, f64), TrackData, Option<IonosphericData>), FitError> {
+
+        if self.size < 2 {
+            return Err(FitError::NotEnoughSymbols);
+        }
+
         // verify tracking completion
         //  complete if we have enough measurements
         let expected_nb =
             (trk_duration.to_seconds() / sampling_period.to_seconds()).ceil() as usize;
+
         if self.buffer.len() < expected_nb {
             return Err(FitError::IncompleteTrackMissingMeasurements);
         }
@@ -283,140 +293,33 @@ impl SVTracker {
         Ok(((elev, azi), trk_data, iono_data))
     }
 
-    /// [FitData] sampling at [Epoch] of measurement.
-    /// Although CGGTTS works in UTC, we accept any timescale here.
-    /// You can then use .fit() to try to fit a track.
-    pub fn sampling(&mut self, sampling_t: Epoch, data: FitData) {
-        if let Some((last_t, _)) = self.buffer.last_key_value() {
-            assert!(
-                sampling_t > *last_t,
-                "samples should be streamed in chronological order"
-            );
-        }
-        self.buffer.insert(sampling_t, data);
-    }
+    /// Provide new [Observation] at t [Epoch] of observation.
+    /// Although CGGTTS works in UTC internally, we accept any timescale here.
+    /// Samples must be provided in chronological order.
+    pub fn new_observation(&mut self, t: Epoch, data: Observation) {
 
-    /// You should only form a track (.fit()) if no_gaps are present in the buffer.
-    pub fn no_gaps(&self, sampling_period: Duration) -> bool {
-        let mut prev = Option::<Epoch>::None;
-        for t in self.buffer.keys() {
-            if let Some(prev) = prev {
-                let dt = *t - prev;
-                if dt > sampling_period {
-                    return false;
+        if let Some(past_t) = self.last_epoch {
+            if let Some(tolerance) = self.gap_tolerance {
+                if t > past_t {
+
                 }
             }
-            prev = Some(*t);
         }
-        true
+
+        self.buffer.insert(t, data);
+        self.size += 1;
     }
 
-    /// Reset and flush this latched measurements
+    /// Reset and flush the internall buffer.
+    /// You should call this any time the satellite being tracked goes out of sight.
     pub fn reset(&mut self) {
+        self.size = 0;
         self.buffer.clear();
     }
 
     /// True if at least one measurement has been latched
     pub fn not_empty(&self) -> bool {
-        !self.buffer.is_empty()
+        self.size > 0
     }
+
 }
-
-/// Scheduler used to form synchronous CGGTTS tracks.
-#[derive(Debug, Clone)]
-pub struct Scheduler {
-    /// Tracking duration in use.
-    pub trk_duration: Duration,
-}
-
-impl Default for Scheduler {
-    fn default() -> Self {
-        Self {
-            trk_duration: Self::bipm_tracking_duration(),
-        }
-    }
-}
-
-impl Scheduler {
-    /// Standard tracking duration [s]
-    pub const BIPM_TRACKING_DURATION_SECONDS: u32 = 960;
-
-    /// Returns standard tracking duration
-    pub fn bipm_tracking_duration() -> Duration {
-        Duration::from_seconds(Self::BIPM_TRACKING_DURATION_SECONDS as f64)
-    }
-
-    /// Generates a new Track Scheduler from a given (usually simply "now")
-    /// datetime expressed as an Epoch.
-    pub fn new(trk_duration: Duration) -> Self {
-        Self { trk_duration }
-    }
-
-    /* track 0 offset within any MJD, expressed in nanos */
-    pub(crate) fn t0_offset_nanos(mjd: u32, trk_duration: Duration) -> i128 {
-        let tracking_nanos = trk_duration.total_nanoseconds();
-        let offset_nanos = (
-            (50_722 - mjd as i128)
-            * 4 * 1_000_000_000 * 60  // shift per day
-            + 2 * 1_000_000_000 * 60
-            // offset on MJD=50722 reference
-        ) % trk_duration.total_nanoseconds();
-        if offset_nanos < 0 {
-            offset_nanos + tracking_nanos
-        } else {
-            offset_nanos
-        }
-    }
-
-    /// Next track start time, compared to given Epoch.
-    pub fn next_track_start(&self, t: Epoch) -> Epoch {
-        let utc_t = match t.time_scale {
-            TimeScale::UTC => t,
-            _ => Epoch::from_utc_duration(t.to_utc_duration()),
-        };
-
-        let trk_duration = self.trk_duration;
-        let mjd = utc_t.to_mjd_utc_days();
-        let mjd_u = mjd.floor() as u32;
-
-        let mjd_next = Epoch::from_mjd_utc((mjd_u + 1) as f64);
-        let time_to_midnight = mjd_next - utc_t;
-
-        match time_to_midnight < trk_duration {
-            true => {
-                /*
-                 * if we're in the last track of the day,
-                 * we need to consider next day (MJD+1)
-                 */
-                let offset_nanos = Self::t0_offset_nanos(mjd_u + 1, trk_duration);
-                Epoch::from_mjd_utc((mjd_u + 1) as f64)
-                    + Duration::from_nanoseconds(offset_nanos as f64)
-            },
-            false => {
-                let offset_nanos = Self::t0_offset_nanos(mjd_u, trk_duration);
-
-                // determine track number this "t" contributes to
-                let day_offset_nanos =
-                    (utc_t - Epoch::from_mjd_utc(mjd_u as f64)).total_nanoseconds() - offset_nanos;
-                let i = (day_offset_nanos as f64 / trk_duration.total_nanoseconds() as f64).ceil();
-
-                let mut e = Epoch::from_mjd_utc(mjd_u as f64)
-                    + Duration::from_nanoseconds(offset_nanos as f64);
-
-                // on first track of day: we only have the day nanos offset
-                if i > 0.0 {
-                    // add ith track offset
-                    e += Duration::from_nanoseconds(i * trk_duration.total_nanoseconds() as f64);
-                }
-                e
-            },
-        }
-    }
-    /// Helper to determine how long until a next "synchronous" track.
-    pub fn time_to_next_track(&self, now: Epoch) -> Duration {
-        self.next_track_start(now) - now
-    }
-}
-
-#[cfg(test)]
-mod test {}

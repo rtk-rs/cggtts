@@ -36,6 +36,10 @@ mod header;
 #[cfg_attr(docsrs, doc(cfg(feature = "scheduler")))]
 mod scheduler;
 
+// #[cfg(feature = "tracker")]
+// #[cfg_attr(docsrs, doc(cfg(feature = "tracker")))]
+// mod track_fit;
+
 #[cfg(test)]
 mod tests;
 
@@ -59,9 +63,8 @@ pub mod prelude {
     #[cfg(feature = "scheduler")]
     pub use crate::scheduler::{calendar::CommonViewCalendar, period::CommonViewPeriod};
 
-    // #[cfg(feature = "scheduler")]
-    // #[cfg_attr(docsrs, doc(cfg(feature = "scheduler")))]
-    // pub use tracker::{FitData, SVTracker};
+    // #[cfg(feature = "tracker")]
+    // pub use crate::track_fit::{Observation, FittedData, SVTracker, SkyTracker, FitError};
 
     // pub re-export
     pub use gnss::prelude::{Constellation, SV};

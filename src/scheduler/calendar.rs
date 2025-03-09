@@ -455,7 +455,8 @@ mod test {
         for i in 0..90 {
             assert_eq!(
                 calendar.period_start_offset_nanos(BIPM_REFERENCE_MJD, i),
-                MJD0_OFFSET_NANOS + i as i128 * PERIOD_DURATION_NANOS_128,
+                (MJD0_OFFSET_NANOS + i as i128 * PERIOD_DURATION_NANOS_128)
+                    % PERIOD_DURATION_NANOS_128,
                 "failed for MJD0 | period={}",
                 i
             );
@@ -471,7 +472,8 @@ mod test {
             for i in 0..90 {
                 assert_eq!(
                     calendar.period_start_offset_nanos(mjd, i),
-                    daily_offset_nanos + i as i128 * PERIOD_DURATION_NANOS_128,
+                    (daily_offset_nanos + i as i128 * PERIOD_DURATION_NANOS_128)
+                        % PERIOD_DURATION_NANOS_128,
                     "failed for MJD -{} | period={}",
                     mjd_offset,
                     i,
@@ -487,9 +489,16 @@ mod test {
 
             // Test all tracks for that day
             for i in 0..90 {
+                let mut expected = (daily_offset_nanos - i as i128 * PERIOD_DURATION_NANOS_128)
+                    % PERIOD_DURATION_NANOS_128;
+
+                if expected.is_negative() {
+                    expected += PERIOD_DURATION_NANOS_128;
+                }
+
                 assert_eq!(
                     calendar.period_start_offset_nanos(mjd, i),
-                    daily_offset_nanos + i as i128 * PERIOD_DURATION_NANOS_128,
+                    expected,
                     "failed for MJD +{} | period={}",
                     mjd_offset,
                     i,

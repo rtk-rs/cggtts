@@ -46,7 +46,7 @@ impl CommonViewPeriod {
     /// use cggtts::prelude::CommonViewPeriod;
     ///
     /// let bipm = CommonViewPeriod::bipm_common_view_period();
-    /// assert_eq!(bipm.total_period().to_seconds(), 960.0);
+    /// assert_eq!(bipm.total_duration().to_seconds(), 960.0);
     /// ```
     pub fn total_duration(&self) -> Duration {
         self.setup_duration + self.tracking_duration
