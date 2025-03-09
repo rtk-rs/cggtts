@@ -153,8 +153,14 @@ impl CommonViewCalendar {
 
         // daily shift (if any)
         if self.has_daily_offset() {
-            let days_offset = (mjd as i128 - self.reference_epoch_mjd_midnight as i128);
-            offset_nanos += self.daily_offset.total_nanoseconds() * days_offset;
+            let days_offset = mjd as i128 - self.reference_epoch_mjd_midnight as i128;
+            offset_nanos += self.daily_offset.total_nanoseconds() * days_offset as i128;
+        }
+
+        offset_nanos %= total_duration_nanos;
+
+        if offset_nanos.is_negative() {
+            offset_nanos += total_duration_nanos;
         }
 
         offset_nanos
@@ -169,115 +175,6 @@ impl CommonViewCalendar {
     fn first_start_offset_nanos(&self, mjd: u32) -> i128 {
         self.period_start_offset_nanos(mjd, 0)
     }
-
-    // /// Next track start time, compared to given Epoch.
-    // pub fn next_track_start(&self, t: Epoch) -> Epoch {
-    //     let utc_t = match t.time_scale {
-    //         TimeScale::UTC => t,
-    //         _ => Epoch::from_utc_duration(t.to_utc_duration()),
-    //     };
-
-    //     let trk_duration = self.trk_duration;
-    //     let mjd = utc_t.to_mjd_utc_days();
-    //     let mjd_u = mjd.floor() as u32;
-
-    //     let mjd_next = Epoch::from_mjd_utc((mjd_u + 1) as f64);
-    //     let time_to_midnight = mjd_next - utc_t;
-
-    //     match time_to_midnight < trk_duration {
-    //         true => {
-    //             /*
-    //              * if we're in the last track of the day,
-    //              * we need to consider next day (MJD+1)
-    //              */
-    //             let offset_nanos = Self::t0_offset_nanos(mjd_u + 1, trk_duration);
-    //             Epoch::from_mjd_utc((mjd_u + 1) as f64)
-    //                 + Duration::from_nanoseconds(offset_nanos as f64)
-    //         },
-    //         false => {
-    //             let offset_nanos = Self::t0_offset_nanos(mjd_u, trk_duration);
-
-    //             // determine track number this "t" contributes to
-    //             let day_offset_nanos =
-    //                 (utc_t - Epoch::from_mjd_utc(mjd_u as f64)).total_nanoseconds() - offset_nanos;
-    //             let i = (day_offset_nanos as f64 / trk_duration.total_nanoseconds() as f64).ceil();
-
-    //             let mut e = Epoch::from_mjd_utc(mjd_u as f64)
-    //                 + Duration::from_nanoseconds(offset_nanos as f64);
-
-    //             // on first track of day: we only have the day nanos offset
-    //             if i > 0.0 {
-    //                 // add ith track offset
-    //                 e += Duration::from_nanoseconds(i * trk_duration.total_nanoseconds() as f64);
-    //             }
-    //             e
-    //         },
-    //     }
-    // }
-
-    // /// Returns true if we're currently inside an observation period (active measurement).
-    // /// To respect this [CommonViewCalendar] table, your measurement system should be active!
-    // pub fn active_measurement(&self) -> Result<bool, HifitimeError> {
-    //     let now = Self::now_utc()?;
-    //     if now > self.start_time {
-    //         // we're inside a cv-period
-    //         Ok(false)
-    //     } else {
-    //         // not inside a cv-period
-    //         Ok(false)
-    //     }
-    // }
-
-    // /// Returns the date and time of the next [CommonViewPeriod] expressed as an [Epoch]
-    // /// and a boolean indicating whether the next [CommonViewPeriod] is `t0`.
-    // /// `now` may be any [Epoch]
-    // /// but is usually `now()` when actively tracking.
-    // /// Although CGGTTS uses UTC strictly, we accept any timescale here.
-    // pub fn next_period_start(&self, now: Epoch) -> (Epoch, bool) {
-    //     let total_period = self.total_period();
-    //     let total_period_nanos = total_period.total_nanoseconds();
-
-    //     let now_utc = match now.time_scale {
-    //         TimeScale::UTC => now,
-    //         _ => Epoch::from_utc_duration(now.to_utc_duration()),
-    //     };
-
-    //     let mjd_utc = (now_utc.to_mjd_utc_days()).floor() as u32;
-    //     let today_midnight_utc = Epoch::from_mjd_utc(mjd_utc as f64);
-
-    //     let today_t0_offset_nanos = self.first_track_offset_nanos(mjd_utc);
-    //     let today_offset_nanos = (now_utc - today_midnight_utc).total_nanoseconds();
-
-    //     let today_t0_utc = today_midnight_utc + (today_t0_offset_nanos as f64) * Unit::Nanosecond;
-
-    //     if today_offset_nanos < today_t0_offset_nanos {
-    //         // still within first track
-    //         (today_t0_utc, true)
-    //     } else {
-    //         let ith_period = (((now_utc - today_t0_utc).total_nanoseconds() as f64)
-    //             / total_period_nanos as f64)
-    //             .ceil() as i128;
-
-    //         let number_periods_per_day = (24 * 3600 * 1_000_000_000) / total_period_nanos;
-
-    //         if ith_period >= number_periods_per_day {
-    //             let tomorrow_t0_offset_nanos = self.first_track_offset_nanos(mjd_utc + 1);
-
-    //             (
-    //                 Epoch::from_mjd_utc((mjd_utc + 1) as f64)
-    //                     + tomorrow_t0_offset_nanos as f64 * Unit::Nanosecond,
-    //                 false,
-    //             )
-    //         } else {
-    //             (
-    //                 today_midnight_utc
-    //                     + today_t0_offset_nanos as f64 * Unit::Nanosecond
-    //                     + (ith_period * total_period_nanos) as f64 * Unit::Nanosecond,
-    //                 false,
-    //             )
-    //         }
-    //     }
-    // }
 }
 
 #[cfg(test)]
@@ -300,6 +197,7 @@ mod test {
         let calendar = CommonViewCalendar::bipm();
 
         assert_eq!(calendar.periods_per_day, 90);
+        assert_eq!(calendar.daily_offset.to_seconds(), -240.0);
         assert_eq!(calendar.reference_epoch_mjd_midnight, BIPM_REFERENCE_MJD);
         assert_eq!(
             calendar.reference_epoch_midnight_offset_nanos,
@@ -316,7 +214,8 @@ mod test {
         for ith_track in 0..90 {
             assert_eq!(
                 calendar.period_start_offset_nanos(BIPM_REFERENCE_MJD, ith_track),
-                MJD0_OFFSET_NANOS + ith_track as i128 * PERIOD_DURATION_NANOS_128,
+                (MJD0_OFFSET_NANOS + ith_track as i128 * PERIOD_DURATION_NANOS_128)
+                    % PERIOD_DURATION_NANOS_128,
                 "failed for MJD0 | track={}",
                 ith_track
             );
@@ -331,7 +230,8 @@ mod test {
             for i in 0..90 {
                 assert_eq!(
                     calendar.period_start_offset_nanos(mjd, i),
-                    daily_offset_nanos + i as i128 * PERIOD_DURATION_NANOS_128,
+                    (daily_offset_nanos + i as i128 * PERIOD_DURATION_NANOS_128)
+                        % PERIOD_DURATION_NANOS_128,
                     "failed for MJD0 -{} | period={}",
                     mjd_offset,
                     i,
@@ -346,9 +246,16 @@ mod test {
 
             // Test all periods for that day
             for i in 0..90 {
+                let mut expected = (daily_offset_nanos - i as i128 * PERIOD_DURATION_NANOS_128)
+                    % PERIOD_DURATION_NANOS_128;
+
+                if expected.is_negative() {
+                    expected += PERIOD_DURATION_NANOS_128;
+                }
+
                 assert_eq!(
                     calendar.period_start_offset_nanos(mjd, i),
-                    daily_offset_nanos + i as i128 * PERIOD_DURATION_NANOS_128,
+                    expected,
                     "failed for MJD0 +{} | period={}",
                     mjd_offset,
                     i,
@@ -357,14 +264,23 @@ mod test {
         }
 
         // test a few verified values
-        // (50721, 6 * 60 * 1_000_000_000),
-        // (50722, 2 * 60 * 1_000_000_000),
-        // (50723, 14 * 60 * 1_000_000_000),
-        // (50724, 10 * 60 * 1_000_000_000),
-        // (59507, 14 * 60 * 1_000_000_000),
-        // (59508, 10 * 60 * 1_000_000_000),
-        // (59509, 6 * 60 * 1_000_000_000),
-        // (59510, 2 * 60 * 1_000_000_000),
+        for (mjd, t0_nanos) in [
+            (50_721, 6 * 60 * 1_000_000_000),
+            (50_722, 2 * 60 * 1_000_000_000),
+            (50_723, 14 * 60 * 1_000_000_000),
+            (50_724, 10 * 60 * 1_000_000_000),
+            (59_507, 14 * 60 * 1_000_000_000),
+            (59_508, 10 * 60 * 1_000_000_000),
+            (59_509, 6 * 60 * 1_000_000_000),
+            (59_510, 2 * 60 * 1_000_000_000),
+        ] {
+            assert_eq!(
+                calendar.first_start_offset_nanos(mjd),
+                t0_nanos,
+                "failed for mdj={}",
+                mjd,
+            );
+        }
     }
 
     #[test]
@@ -375,6 +291,7 @@ mod test {
         let calendar = CommonViewCalendar::bipm_unaliged_gps_sideral();
 
         assert_eq!(calendar.periods_per_day, 90);
+        assert_eq!(calendar.daily_offset.to_seconds(), 0.0);
         assert_eq!(calendar.reference_epoch_mjd_midnight, BIPM_REFERENCE_MJD);
         assert_eq!(
             calendar.reference_epoch_midnight_offset_nanos,
