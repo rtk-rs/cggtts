@@ -17,7 +17,7 @@ impl Header {
         buf.clear();
 
         buf.push_str(&format!(
-            "CGGTTS GENERIC DATA FORMAT VERSION = {}\n",
+            "CGGTTS     GENERIC DATA FORMAT VERSION = {}\n",
             Version::Version2E,
         ));
 
@@ -162,15 +162,12 @@ mod test {
 
         let header = &cggtts.header;
 
-        // TODO: unlock, problem @ RCVR parsing
-        //let rcvr = header.receiver.as_ref().expect("missing RCVR");
-        //assert_eq!(rcvr.model, "GTR51");
-        //assert_eq!(rcvr.serial_number, "2204005");
+        assert_eq!(header.receiver.manufacturer, "GTR51");
+        assert_eq!(header.receiver.model, "2204005");
 
-        // TODO: unlock, problem @ RCVR parsing
-        // let ims = header.ims_hardware.as_ref().expect("missing IMS");
-        // assert_eq!(rcvr.model, "GTR51");
-        // assert_eq!(rcvr.serial_number, "2204005");
+        let ims = header.ims_hardware.as_ref().expect("missing IMS");
+        assert_eq!(ims.manufacturer, "GTR51");
+        assert_eq!(ims.model, "2204005");
 
         header.format(&mut buf, &mut utf8).unwrap();
 
@@ -178,14 +175,13 @@ mod test {
         let ascii_utf8 = inner.to_utf8_ascii().expect("generated invalid utf-8!");
 
         // TODO: missing
-        // RCVR = GTR51 2204005 1.12.0
-        // IMS = GTR51 2204005 1.12.0
-
-        // TODO: missing
         // INT DLY =   34.6 ns (GAL E1),   0.0 ns (GAL E5),   0.0 ns (GAL E6),   0.0 ns (GAL E5b),  25.6 ns (GAL E5a)     CAL_ID = 1015-2021
-        let expected = "CGGTTS GENERIC DATA FORMAT VERSION = 2E
-REV DATE = 2014-02-20
+
+        let expected = "CGGTTS     GENERIC DATA FORMAT VERSION = 2E
+REV DATE = 2023-06-27
+RCVR = GTR51 2204005 1.12.0 0 
 CH = 20
+IMS = GTR51 2204005 1.12.0 0 
 LAB = LAB
 X =  3970727.800 m
 Y =  1018888.020 m
@@ -195,7 +191,7 @@ COMMENTS = NO COMMENTS
 CAB DLY = 155.2 ns
 REF DLY = 000.0 ns
 REF = REF_IN
-CKSUM = A8";
+CKSUM = 53";
 
         for (content, expected) in ascii_utf8.lines().zip(expected.lines()) {
             assert_eq!(content, expected);

@@ -40,7 +40,7 @@ impl std::str::FromStr for CalibrationID {
         if parsed_items == 2 {
             Ok(Self { process_id, year })
         } else {
-            Err(ParsingError::InvalidCalibrationId)
+            Err(ParsingError::CalibrationFormat)
         }
     }
 }

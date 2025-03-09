@@ -16,12 +16,6 @@ pub enum CrcError {
 /// Errors strictly related to file parsing.
 #[derive(Debug, Error)]
 pub enum ParsingError {
-    #[error("file i/o error: {0}")]
-    IoError(#[from] std::io::Error),
-    #[error("failed to parse integer number")]
-    ParseIntError(#[from] std::num::ParseIntError),
-    #[error("failed to parse float number")]
-    ParseFloatError(#[from] std::num::ParseFloatError),
     #[error("only revision 2E is supported")]
     VersionMismatch,
     #[error("invalid version")]
@@ -36,8 +30,8 @@ pub enum ParsingError {
     ChannelNumber,
     #[error("non supported file revision")]
     NonSupportedRevision,
-    #[error("invalid delay calibration ID#")]
-    InvalidCalibrationId,
+    #[error("delay calibration format")]
+    CalibrationFormat,
     #[error("mixing constellations is not allowed in CGGTTS")]
     MixedConstellation,
     #[error("failed to identify delay value in line \"{0}\"")]
@@ -56,6 +50,10 @@ pub enum ParsingError {
     CrcMissing,
     #[error("track parsing error")]
     TrackParsing(#[from] TrackError),
+    #[error("antenna cable delay")]
+    AntennaCableDelay,
+    #[error("local ref delay")]
+    LocalRefDelay,
 }
 
 /// Errors strictly related to CGGTTS formatting

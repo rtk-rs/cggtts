@@ -333,7 +333,7 @@ impl CGGTTS {
     /// ```
     /// use cggtts::prelude::CGGTTS;
     ///
-    /// let cggtts = CGGTTS::from_file("data/CGTTTS/GZGTR560.258")
+    /// let cggtts = CGGTTS::from_file("data/CGGTTS/GZGTR560.258")
     ///     .unwrap();
     ///
     /// if let Some(track) = cggtts.tracks.first() {
@@ -344,7 +344,8 @@ impl CGGTTS {
     /// }
     ///```
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self, ParsingError> {
-        let fd = File::open(path)?;
+        let fd = File::open(path).unwrap_or_else(|e| panic!("File open error: {}", e));
+
         let mut reader = BufReader::new(fd);
         Self::parse(&mut reader)
     }
@@ -395,7 +396,8 @@ impl CGGTTS {
     #[cfg(feature = "flate2")]
     #[cfg_attr(docsrs, doc(cfg(feature = "flate2")))]
     pub fn from_gzip_file<P: AsRef<Path>>(path: P) -> Result<Self, ParsingError> {
-        let fd = File::open(path)?;
+        let fd = File::open(path).unwrap_or_else(|e| panic!("File open error: {}", e));
+
         let reader = GzDecoder::new(fd);
 
         let mut reader = BufReader::new(reader);

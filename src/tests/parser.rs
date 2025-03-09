@@ -60,7 +60,10 @@ mod test {
         let cggtts = CGGTTS::from_file(&fullpath).unwrap();
 
         assert_eq!(cggtts.header.receiver.manufacturer, "GTR51");
-        assert!(cggtts.header.ims_hardware.is_none());
+
+        let ims = cggtts.header.ims_hardware.as_ref().unwrap();
+        assert_eq!(ims.manufacturer, "GTR51");
+
         assert!(cggtts.is_galileo_cggtts());
 
         assert_eq!(
