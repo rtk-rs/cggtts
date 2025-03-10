@@ -21,7 +21,10 @@ default = [] # no features by default
 scheduler = []
 
 # Satellite tracker and fit method
-tracker = ["polyfit-rs"]
+tracker = [
+    "dep:polyfit-rs",
+    "dep:log",
+]
 
 [dependencies]
 thiserror = "2"
@@ -30,12 +33,11 @@ strum = "0.27"
 itertools = "0.14"
 strum_macros = "0.27"
 flate2 = { version = "1", optional = true }
-serde = { version = "1.0", optional = true, features = ["derive"] }
-gnss-rs = { version = "2.3.5", features = ["serde"] }
-hifitime = { version = "4.0", features = ["serde", "std"] }
-
-# track scheduling
+log = { version = "0.4", optional = true }
 polyfit-rs = { version = "0.2", optional = true }
+gnss-rs = { version = "2.3.5", features = ["serde"] }
+serde = { version = "1.0", optional = true, features = ["derive"] }
+hifitime = { version = "4.0", features = ["serde", "std"] }
 
 [dev-dependencies]
 rand = "0.8"

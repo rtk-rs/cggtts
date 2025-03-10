@@ -36,9 +36,9 @@ mod header;
 #[cfg_attr(docsrs, doc(cfg(feature = "scheduler")))]
 mod scheduler;
 
-// #[cfg(feature = "tracker")]
-// #[cfg_attr(docsrs, doc(cfg(feature = "tracker")))]
-// mod track_fit;
+#[cfg(feature = "tracker")]
+#[cfg_attr(docsrs, doc(cfg(feature = "tracker")))]
+mod tracker;
 
 #[cfg(test)]
 mod tests;
