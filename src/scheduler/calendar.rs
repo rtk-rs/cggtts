@@ -136,8 +136,6 @@ impl CommonViewCalendar {
     fn period_start_offset_nanos(&self, mjd: u32, ith: u16) -> i128 {
         // compute offset to reference epoch
         let total_duration_nanos = self.period.total_duration().total_nanoseconds();
-
-        // period offset
         let mut offset_nanos = ith as i128 * total_duration_nanos;
 
         // offset from midnight (if any)
@@ -184,26 +182,42 @@ impl CommonViewCalendar {
         let mjd_next_midnight = Epoch::from_mjd_utc((mjd + 1) as f64);
         let time_to_midnight = mjd_next_midnight - mjd_midnight;
 
-        let t_utc = if time_to_midnight < period_duration {
-            // we're inside the last track of that day
-            // simply return T0 of MJD+1
-            let t0_offset_nanos = self.first_start_offset_nanos(mjd + 1) as f64;
-            Epoch::from_duration(t0_offset_nanos * Unit::Nanosecond, TimeScale::UTC)
+        // offset of first period of that day
+        let offset_nanos = self.first_start_offset_nanos(mjd) as f64;
+
+        // first track of day
+        let t0_utc = mjd_midnight + offset_nanos as f64 * Unit::Nanosecond;
+
+        // last track of day
+        let tn_utc = t0_utc
+            + ((self.periods_per_day - 1) as i128 * period_duration.total_nanoseconds()) as f64
+                * Unit::Nanosecond;
+
+        let t_utc = if t_utc < t0_utc {
+            // Propose first track of day
+            t0_utc
+        } else if t_utc == t0_utc {
+            // Propose second track of day
+            t0_utc + period_duration
+        } else if t_utc > tn_utc {
+            // Propose first track of day +1
+            mjd_next_midnight + self.first_start_offset_nanos(mjd + 1) as f64 * Unit::Nanosecond
         } else {
-            // offset of first period of that day
-            let offset_nanos = self.first_start_offset_nanos(mjd) as f64;
-            let t0_utc = mjd_midnight + offset_nanos * Unit::Nanosecond;
+            // compute period index
+            let mut i = (t_utc - t0_utc).total_nanoseconds() as f64;
+            i /= period_duration.total_nanoseconds() as f64;
 
-            // determine track number this "t" contributes to
-            let i = (t_utc - t0_utc).total_nanoseconds() / period_duration.total_nanoseconds();
+            // Handles case where we're at the edge of a period
+            let i_ceiled = i.ceil();
 
-            println!("ith={}", i);
-
-            if t_utc < t0_utc {
-                // on first track of day, we only have the daily offset
+            if i_ceiled == i {
                 t0_utc
+                    + ((i.ceil() as i128 + 1) * period_duration.total_nanoseconds()) as f64
+                        * Unit::Nanosecond
             } else {
-                t0_utc + ((i + 1) * period_duration.total_nanoseconds()) as f64 * Unit::Nanosecond
+                t0_utc
+                    + ((i.ceil() as i128) * period_duration.total_nanoseconds()) as f64
+                        * Unit::Nanosecond
             }
         };
 
@@ -348,43 +362,57 @@ mod test {
         // Test a few verified values
         for (i, (t, expected)) in [
             (
+                //0
                 Epoch::from_mjd_utc(50_722.0),
                 Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0),
             ),
             (
+                //1
                 Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(1.0),
                 Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0),
             ),
             (
+                //2
                 Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(2.0),
                 Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0),
             ),
             (
+                //3
                 Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(10.0),
                 Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0),
             ),
-            // TODO
-            // (
-            //     Epoch::from_mjd_utc(50_722.0) - Duration::from_seconds(10.0),
-            //     Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0),
-            // ),
             (
+                //4
+                Epoch::from_mjd_utc(50_722.0) - Duration::from_seconds(1.0),
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0),
+            ),
+            (
+                //5
+                Epoch::from_mjd_utc(50_722.0) - Duration::from_seconds(10.0),
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0),
+            ),
+            (
+                //6
                 Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(119.0),
                 Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0),
             ),
             (
+                //7
                 Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0),
                 Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0 + 960.0),
             ),
             (
+                //8
                 Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(121.0),
                 Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0 + 960.0),
             ),
             (
+                //9
                 Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0 + 959.0),
                 Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0 + 960.0),
             ),
             (
+                //10
                 Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0 + 960.0),
                 Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0 + 2.0 * 960.0),
             ),
@@ -405,6 +433,7 @@ mod test {
                 Epoch::from_mjd_utc(59_506.0) + Duration::from_seconds(2.0 * 60.0),
             ),
             (
+                //15
                 Epoch::from_mjd_utc(59_507.0),
                 Epoch::from_mjd_utc(59_507.0) + Duration::from_seconds(14.0 * 60.0),
             ),
@@ -504,6 +533,88 @@ mod test {
                     i,
                 );
             }
+        }
+
+        // Test a few verified values
+        for (i, (t, expected)) in [
+            (
+                //0
+                Epoch::from_mjd_utc(50_722.0),
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0),
+            ),
+            (
+                //1
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(1.0),
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0),
+            ),
+            (
+                //2
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(2.0),
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0),
+            ),
+            (
+                //3
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(10.0),
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0),
+            ),
+            (
+                //4
+                Epoch::from_mjd_utc(50_722.0) - Duration::from_seconds(1.0),
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0),
+            ),
+            (
+                //5
+                Epoch::from_mjd_utc(50_722.0) - Duration::from_seconds(10.0),
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0),
+            ),
+            (
+                //6
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(119.0),
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0),
+            ),
+            (
+                //7
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0),
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0 + 960.0),
+            ),
+            (
+                //8
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(121.0),
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0 + 960.0),
+            ),
+            (
+                //9
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0 + 959.0),
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0 + 960.0),
+            ),
+            (
+                //10
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0 + 960.0),
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0 + 2.0 * 960.0),
+            ),
+            (
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0 + 961.0),
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0 + 2.0 * 960.0),
+            ),
+            (
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0 + 2.0 * 960.0 - 1.0),
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0 + 2.0 * 960.0),
+            ),
+            (
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0 + 2.0 * 960.0),
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0 + 3.0 * 960.0),
+            ),
+        ]
+        .iter()
+        .enumerate()
+        {
+            assert_eq!(
+                calendar.next_period_start_after(*t),
+                *expected,
+                "failed for i={}/t={:?}",
+                i,
+                t
+            );
         }
     }
 }
