@@ -534,5 +534,87 @@ mod test {
                 );
             }
         }
+
+        // Test a few verified values
+        for (i, (t, expected)) in [
+            (
+                //0
+                Epoch::from_mjd_utc(50_722.0),
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0),
+            ),
+            (
+                //1
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(1.0),
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0),
+            ),
+            (
+                //2
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(2.0),
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0),
+            ),
+            (
+                //3
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(10.0),
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0),
+            ),
+            (
+                //4
+                Epoch::from_mjd_utc(50_722.0) - Duration::from_seconds(1.0),
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0),
+            ),
+            (
+                //5
+                Epoch::from_mjd_utc(50_722.0) - Duration::from_seconds(10.0),
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0),
+            ),
+            (
+                //6
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(119.0),
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0),
+            ),
+            (
+                //7
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0),
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0 + 960.0),
+            ),
+            (
+                //8
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(121.0),
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0 + 960.0),
+            ),
+            (
+                //9
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0 + 959.0),
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0 + 960.0),
+            ),
+            (
+                //10
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0 + 960.0),
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0 + 2.0 * 960.0),
+            ),
+            (
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0 + 961.0),
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0 + 2.0 * 960.0),
+            ),
+            (
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0 + 2.0 * 960.0 - 1.0),
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0 + 2.0 * 960.0),
+            ),
+            (
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0 + 2.0 * 960.0),
+                Epoch::from_mjd_utc(50_722.0) + Duration::from_seconds(120.0 + 3.0 * 960.0),
+            ),
+        ]
+        .iter()
+        .enumerate()
+        {
+            assert_eq!(
+                calendar.next_period_start_after(*t),
+                *expected,
+                "failed for i={}/t={:?}",
+                i,
+                t
+            );
+        }
     }
 }
