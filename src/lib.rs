@@ -36,9 +36,9 @@ mod header;
 #[cfg_attr(docsrs, doc(cfg(feature = "scheduler")))]
 mod scheduler;
 
-// #[cfg(feature = "tracker")]
-// #[cfg_attr(docsrs, doc(cfg(feature = "tracker")))]
-// mod track_fit;
+#[cfg(feature = "tracker")]
+#[cfg_attr(docsrs, doc(cfg(feature = "tracker")))]
+mod tracker;
 
 #[cfg(test)]
 mod tests;
@@ -63,8 +63,8 @@ pub mod prelude {
     #[cfg(feature = "scheduler")]
     pub use crate::scheduler::{calendar::CommonViewCalendar, period::CommonViewPeriod};
 
-    // #[cfg(feature = "tracker")]
-    // pub use crate::track_fit::{Observation, FittedData, SVTracker, SkyTracker, FitError};
+    #[cfg(feature = "tracker")]
+    pub use crate::tracker::{FitError, FittedData, Observation, SVTracker, SkyTracker};
 
     // pub re-export
     pub use gnss::prelude::{Constellation, SV};
@@ -80,9 +80,6 @@ use crate::{
     header::{Header, ReferenceTime},
     track::{CommonViewClass, Track},
 };
-
-// /// Latest CGGTTS release : only version we truly support
-// pub const CURRENT_RELEASE: &str = "2E";
 
 /// [CGGTTS] is a structure split in two:
 /// - the [Header] section gives general information

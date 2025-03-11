@@ -1,8 +1,8 @@
 mod fit;
-mod fitted;
+// mod fitted;
 
-pub use fit::{FitError, Observation, SVTracker,};
-pub use fitted::FittedData;
+pub use fit::{FitError, Observation, SVTracker};
+// pub use fitted::FittedData;
 
 use crate::prelude::SV;
 use std::collections::HashMap;

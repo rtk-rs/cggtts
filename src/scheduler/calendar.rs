@@ -29,15 +29,17 @@ pub struct CommonViewCalendar {
 }
 
 impl CommonViewCalendar {
-    /// Design a new [CommonViewCalendar] (planification table).
+    /// Design a new [CommonViewCalendar] to plan your common view measurements
+    /// and CGGTTS realizations.
     ///
     /// ## Input
     /// - reference_epoch: reference [Epoch] used in the scheduling process.  
-    /// In historical CGGTTS, this is MJD 50_722 +2'.
+    /// In [Self::bipm], this is MJD 50_722 00:00:02.
     ///
     /// - period: [CommonViewPeriod] specifications.
     /// The total [CommonViewPeriod] must be a perfect multiple of a day,
     /// we do not support a fractional number of daily periods.
+    /// In [Self::bipm], this is [CommonViewPeriod::bipm_common_view_period].
     pub fn new(reference_epoch: Epoch, period: CommonViewPeriod) -> Result<Self, Error> {
         let total_duration = period.total_duration().to_seconds();
         let one_day = Duration::from_days(1.0).to_seconds();
@@ -241,7 +243,7 @@ impl CommonViewCalendar {
 
     /// Returns remaining time (as [Duration]) until start of next
     /// [CommonViewPeriod] after specified [Epoch].
-    pub fn time_to_next_start(&self, t: Epoch) -> Duration {
+    pub fn time_to_next_period(&self, t: Epoch) -> Duration {
         let next_start = self.next_period_start_after(t);
         t - next_start
     }
@@ -249,7 +251,7 @@ impl CommonViewCalendar {
     /// Returns remaining time (as [Duration]) until start of next
     /// active data collection, after specified [Epoch].
     pub fn time_to_next_data_collection(&self, t: Epoch) -> Duration {
-        let mut dt = self.time_to_next_start(t);
+        let mut dt = self.time_to_next_period(t);
         if self.period.setup_duration == Duration::ZERO {
             dt += self.period.setup_duration;
         }
