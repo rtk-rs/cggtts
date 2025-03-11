@@ -4,17 +4,9 @@ use log::debug;
 use polyfit_rs::polyfit_rs::polyfit;
 use thiserror::Error;
 
-use crate::prelude::{Duration, Epoch, IonosphericData, TrackData, SV};
+use crate::prelude::{Duration, Epoch, FittedData, IonosphericData, TrackData, SV};
 
 use std::collections::BTreeMap;
-
-fn linear_reg_2d(i: (f64, f64), j: (f64, f64)) -> (f64, f64) {
-    let (_, y_i) = i;
-    let (x_j, y_j) = j;
-    let a = y_j - y_i;
-    let b = y_j - a * x_j;
-    (a, b)
-}
 
 /// CGGTTS track formation errors
 #[derive(Debug, Clone, Error)]
@@ -56,33 +48,14 @@ pub struct Observation {
     pub refsys: f64,
     /// Modeled Tropospheric Delay in seconds of propagation delay
     pub mdtr: f64,
+    /// Modeled Ionospheric Delay in seconds of propagation delay
+    pub mdio: f64,
+    /// Possible measured Ionospheric Delay in seconds of propagation delay
+    pub msio: Option<f64>,
     /// Elevation in degrees
     pub elevation: f64,
     /// Azimuth in degrees
     pub azimuth: f64,
-}
-
-/// [FittedData] resulting from running the fit algorithm over many [Observation]s.
-#[derive(Debug, Copy, Default, Clone)]
-pub struct FittedData {
-    /// [Epoch] at midtrack
-    pub midtrack: Epoch,
-    /// Satellite onboard clock offset to local clock
-    pub refsv_s: f64,
-    /// REFSV derivative (s/s)
-    pub srsv_s_s: f64,
-    /// Satellite onboard clock offset to timescale
-    pub refsys_s: f64,
-    /// REFSYS derivative (s/s)
-    pub srsys_s_s: f64,
-    /// DSG: REFSYS Root Mean Square
-    pub dsg: f64,
-    /// Modeled Tropospheric Delay in seconds of propagation delay
-    pub mdtr_s: f64,
-    /// Elevation at midtrack (in degrees)
-    pub elevation_deg: f64,
-    /// Azimuth at midtrack (in degrees)
-    pub azimuth_deg: f64,
 }
 
 impl SVTracker {
@@ -105,6 +78,8 @@ impl SVTracker {
     /// Feed new [Observation] at t [Epoch] of observation (sampling).
     /// Although CGGTTS works in UTC internally, we accept any timescale here.
     /// Samples must be provided in chronological order.
+    /// If you provide MSIO, you are expected to provide it at very single epoch,
+    /// like any other fields, in order to obtain valid results.
     ///
     /// ## Input
     /// - data: [Observation]
@@ -141,19 +116,21 @@ impl SVTracker {
         self.size > 0
     }
 
-    /// Track fitting attempt.
-    pub fn fit(
-        &mut self,
-        trk_duration: Duration,
-        sampling_period: Duration,
-        trk_midpoint: Epoch,
-    ) -> Result<FittedData, FitError> {
+    /// Apply fit algorithm over internal buffer.
+    /// You manage the buffer content and sampling and are responsible
+    /// for the [FittedData] you may obtain. The requirement being at least 3
+    /// symbols must have been buffered.
+    pub fn fit(&mut self) -> Result<FittedData, FitError> {
         // Request 3 symbols at least
         if self.size < 2 {
             return Err(FitError::NotEnoughSymbols);
         }
 
-        let midpoint = self.size / 2 - 1;
+        let midpoint = if self.size % 2 == 0 {
+            self.size / 2
+        } else {
+            (self.size + 1) / 2
+        };
 
         // Retrieve information @ mid point
         let t_mid = self.buffer[midpoint].epoch;
@@ -176,7 +153,7 @@ impl SVTracker {
             .collect::<Vec<_>>();
 
         // REFSV
-        let (srsv, srsv_b) = polyfit(
+        let fit = polyfit(
             &x_t,
             self.buffer
                 .iter()
@@ -187,10 +164,11 @@ impl SVTracker {
         )
         .or(Err(FitError::LinearRegressionFailure))?;
 
+        let (srsv, srsv_b) = (fit[0], fit[1]);
         let refsv = srsv * t_mid_s + srsv_b;
 
         // REFSYS
-        let (srsys, srsys_b) = polyfit(
+        let fit = polyfit(
             &x_t,
             self.buffer
                 .iter()
@@ -201,17 +179,19 @@ impl SVTracker {
         )
         .or(Err(FitError::LinearRegressionFailure))?;
 
-        let refsys = srsys * t_mid_s + srsys_b;
+        let (srsys, srsys_b) = (fit[0], fit[1]);
+        let refsys_fit = srsys * t_mid_s + srsys_b;
 
         // DSG
         let mut dsg = 0.0_f64;
-        for data in self.buffer.iter() {
-            dsg += (srsys * data.epoch + srsys_b - refsys).powi(2);
+        for obs in self.buffer.iter() {
+            dsg += (obs.refsys - refsys_fit).powi(2);
         }
+        dsg /= self.size as f64;
         dsg = dsg.sqrt();
 
         // MDTR
-        let (smdt, smdt_b) = polyfit(
+        let fit = polyfit(
             &x_t,
             self.buffer
                 .iter()
@@ -222,10 +202,11 @@ impl SVTracker {
         )
         .or(Err(FitError::LinearRegressionFailure))?;
 
+        let (smdt, smdt_b) = (fit[0], fit[1]);
         let mdtr = smdt * t_mid_s + smdt_b;
 
         // MDIO
-        let (smdi, smdi_b) = polyfit(
+        let fit = polyfit(
             &x_t,
             self.buffer
                 .iter()
@@ -236,12 +217,47 @@ impl SVTracker {
         )
         .or(Err(FitError::LinearRegressionFailure))?;
 
+        let (smdi, smdi_b) = (fit[0], fit[1]);
         let mdio = smdi * t_mid_s + smdi_b;
 
-        fitted.srsv = srsv;
-        fitted.refsv = refsv;
-        fitted.srsys = srsys;
-        fitted.refsys = refsys;
+        // MSIO
+        let msio = self
+            .buffer
+            .iter()
+            .filter_map(|data| {
+                if let Some(msio) = data.msio {
+                    Some(msio)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let msio_len = msio.len();
+
+        if msio_len > 0 {
+            let fit = polyfit(&x_t, &msio, 1).or(Err(FitError::LinearRegressionFailure))?;
+
+            let (smsi, smsi_b) = (fit[0], fit[1]);
+            let msio_fit = smsi * t_mid_s + smsi_b;
+
+            // ISG
+            let mut isg = 0.0_f64;
+            for i in 0..msio_len {
+                isg += (msio_fit - msio[i]).powi(2);
+            }
+            isg /= self.size as f64;
+            isg = isg.sqrt();
+
+            fitted.isg = Some(isg);
+            fitted.msio_s = Some(msio_fit);
+            fitted.smsi_s_s = Some(smsi);
+        }
+
+        fitted.srsv_s_s = srsv;
+        fitted.refsv_s = refsv;
+        fitted.srsys_s_s = srsys;
+        fitted.refsys_s = refsys_fit;
         fitted.dsg = dsg;
         fitted.mdtr_s = mdtr;
         fitted.smdt_s_s = smdt;
@@ -254,5 +270,181 @@ impl SVTracker {
         self.size = 0;
 
         Ok(fitted)
+    }
+
+    fn has_msio(&self) -> bool {
+        self.buffer
+            .iter()
+            .filter(|data| data.msio.is_some())
+            .count()
+            > 0
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::prelude::{Epoch, FittedData, Observation, SVTracker, SV};
+    use std::str::FromStr;
+
+    #[test]
+    fn tracker_no_gap_x3() {
+        let g01 = SV::from_str("G01").unwrap();
+
+        let mut tracker = SVTracker::new(sv, None);
+
+        for obs in [
+            Observation {
+                epoch: Epoch::from_str("2020-01-01T00:00:00 UTC").unwrap(),
+                refsv: 1.0,
+                refsys: 2.0,
+                mdtr: 3.0,
+                mdio: 4.0,
+                msio: None,
+                elevation: 6.0,
+                azimuth: 7.0,
+            },
+            Observation {
+                epoch: Epoch::from_str("2020-01-01T00:00:30 UTC").unwrap(),
+                refsv: 1.1,
+                refsys: 2.1,
+                mdtr: 3.1,
+                mdio: 4.1,
+                msio: None,
+                elevation: 6.1,
+                azimuth: 7.1,
+            },
+        ] {
+            tracker.new_observation(obs);
+        }
+
+        assert!(tracker.fit().is_err());
+
+        tracker.new_observation(Observation {
+            epoch: Epoch::from_str("2020-01-01T00:01:00 UTC").unwrap(),
+            refsv: 1.2,
+            refsys: 2.2,
+            mdtr: 3.2,
+            mdio: 4.2,
+            msio: None,
+            elevation: 6.2,
+            azimuth: 7.2,
+        });
+
+        let fitted = tracker.fit().unwrap();
+
+        assert_eq!(fitted.sv, g01);
+        assert_eq!(fitted.duration, Duration::from_seconds(60.0));
+        assert_eq!(
+            fitted.first_t,
+            Epoch::from_str("2020-01-01T00:00:00 UTC").unwrap()
+        );
+        assert_eq!(
+            fitted.midtrack,
+            Epoch::from_str("2020-01-01T00:00:30 UTC").unwrap()
+        );
+        assert_eq!(fitted.elevation_deg, 6.1);
+        assert_eq!(fitted.azimuth_deg, 7.1);
+        assert_eq!(fitted.refsv_s, 0.0);
+
+        tracker.new_observation(Observation {
+            epoch: Epoch::from_str("2020-01-01T00:01:30 UTC").unwrap(),
+            refsv: 1.3,
+            refsys: 2.3,
+            mdtr: 3.3,
+            mdio: 4.3,
+            msio: None,
+            elevation: 6.3,
+            azimuth: 7.3,
+        });
+
+        let fitted = tracker.fit().unwrap();
+    }
+
+    #[test]
+    fn tracker_no_gap_x4() {
+        let g01 = SV::from_str("G01").unwrap();
+
+        let mut tracker = SVTracker::new(sv, None);
+
+        for obs in [
+            Observation {
+                epoch: Epoch::from_str("2020-01-01T00:00:00 UTC").unwrap(),
+                refsv: 1.0,
+                refsys: 2.0,
+                mdtr: 3.0,
+                mdio: 4.0,
+                msio: None,
+                elevation: 6.0,
+                azimuth: 7.0,
+            },
+            Observation {
+                epoch: Epoch::from_str("2020-01-01T00:00:30 UTC").unwrap(),
+                refsv: 1.1,
+                refsys: 2.1,
+                mdtr: 3.1,
+                mdio: 4.1,
+                msio: None,
+                elevation: 6.1,
+                azimuth: 7.1,
+            },
+        ] {
+            tracker.new_observation(obs);
+        }
+
+        assert!(tracker.fit().is_err());
+
+        tracker.new_observation(Observation {
+            epoch: Epoch::from_str("2020-01-01T00:01:00 UTC").unwrap(),
+            refsv: 1.2,
+            refsys: 2.2,
+            mdtr: 3.2,
+            mdio: 4.2,
+            msio: None,
+            elevation: 6.2,
+            azimuth: 7.2,
+        });
+
+        let fitted = tracker.fit().unwrap();
+
+        assert_eq!(fitted.sv, g01);
+        assert_eq!(fitted.duration, Duration::from_seconds(60.0));
+        assert_eq!(
+            fitted.first_t,
+            Epoch::from_str("2020-01-01T00:00:00 UTC").unwrap()
+        );
+        assert_eq!(
+            fitted.midtrack,
+            Epoch::from_str("2020-01-01T00:00:30 UTC").unwrap()
+        );
+        assert_eq!(fitted.elevation_deg, 6.1);
+        assert_eq!(fitted.azimuth_deg, 7.1);
+        assert_eq!(fitted.refsv_s, 0.0);
+
+        tracker.new_observation(Observation {
+            epoch: Epoch::from_str("2020-01-01T00:01:30 UTC").unwrap(),
+            refsv: 1.3,
+            refsys: 2.3,
+            mdtr: 3.3,
+            mdio: 4.3,
+            msio: None,
+            elevation: 6.3,
+            azimuth: 7.3,
+        });
+
+        let fitted = tracker.fit().unwrap();
+
+        assert_eq!(fitted.sv, g01);
+        assert_eq!(fitted.duration, Duration::from_seconds(60.0));
+        assert_eq!(
+            fitted.first_t,
+            Epoch::from_str("2020-01-01T00:00:00 UTC").unwrap()
+        );
+        assert_eq!(
+            fitted.midtrack,
+            Epoch::from_str("2020-01-01T00:01:00 UTC").unwrap()
+        );
+        assert_eq!(fitted.elevation_deg, 6.1);
+        assert_eq!(fitted.azimuth_deg, 7.1);
+        assert_eq!(fitted.refsv_s, 0.0);
     }
 }
