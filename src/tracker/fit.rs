@@ -88,7 +88,7 @@ impl SVTracker {
             if let Some(tolerance) = self.gap_tolerance {
                 let dt = data.epoch - past_t;
                 if dt > tolerance {
-                    print!("{}({}) - {} data gap", data.epoch, self.sv, dt);
+                    debug!("{}({}) - {} data gap", data.epoch, self.sv, dt);
                     self.size = 0;
                     self.buffer.clear();
                 }
