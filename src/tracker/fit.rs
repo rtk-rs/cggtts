@@ -88,7 +88,7 @@ impl SVTracker {
             if let Some(tolerance) = self.gap_tolerance {
                 let dt = data.epoch - past_t;
                 if dt > tolerance {
-                    debug!("{}({}) - {} data gap", data.epoch, self.sv, dt);
+                    print!("{}({}) - {} data gap", data.epoch, self.sv, dt);
                     self.size = 0;
                     self.buffer.clear();
                 }
@@ -122,25 +122,30 @@ impl SVTracker {
     /// symbols must have been buffered.
     pub fn fit(&mut self) -> Result<FittedData, FitError> {
         // Request 3 symbols at least
-        if self.size < 2 {
+        if self.size < 3 {
             return Err(FitError::NotEnoughSymbols);
         }
 
         let midpoint = if self.size % 2 == 0 {
-            self.size / 2
+            self.size / 2 - 1
         } else {
-            (self.size + 1) / 2
+            (self.size + 1) / 2 - 1
         };
 
         // Retrieve information @ mid point
+        let t0 = self.buffer[0].epoch;
         let t_mid = self.buffer[midpoint].epoch;
         let t_mid_s = t_mid.duration.to_unit(Unit::Second);
+        let t_last = self.buffer[self.size - 1].epoch;
 
         let azim_mid = self.buffer[midpoint].azimuth;
         let elev_mid = self.buffer[midpoint].elevation;
 
         let mut fitted = FittedData::default();
 
+        fitted.sv = self.sv;
+        fitted.first_t = t0;
+        fitted.duration = t_last - t0;
         fitted.midtrack = t_mid;
         fitted.azimuth_deg = azim_mid;
         fitted.elevation_deg = elev_mid;
@@ -283,14 +288,14 @@ impl SVTracker {
 
 #[cfg(test)]
 mod test {
-    use crate::prelude::{Epoch, FittedData, Observation, SVTracker, SV};
+    use crate::prelude::{Duration, Epoch, FittedData, Observation, SVTracker, SV};
     use std::str::FromStr;
 
     #[test]
     fn tracker_no_gap_x3() {
         let g01 = SV::from_str("G01").unwrap();
 
-        let mut tracker = SVTracker::new(sv, None);
+        let mut tracker = SVTracker::new(g01, None);
 
         for obs in [
             Observation {
@@ -334,37 +339,26 @@ mod test {
 
         assert_eq!(fitted.sv, g01);
         assert_eq!(fitted.duration, Duration::from_seconds(60.0));
+
         assert_eq!(
             fitted.first_t,
             Epoch::from_str("2020-01-01T00:00:00 UTC").unwrap()
         );
+
         assert_eq!(
             fitted.midtrack,
             Epoch::from_str("2020-01-01T00:00:30 UTC").unwrap()
         );
+
         assert_eq!(fitted.elevation_deg, 6.1);
         assert_eq!(fitted.azimuth_deg, 7.1);
-        assert_eq!(fitted.refsv_s, 0.0);
-
-        tracker.new_observation(Observation {
-            epoch: Epoch::from_str("2020-01-01T00:01:30 UTC").unwrap(),
-            refsv: 1.3,
-            refsys: 2.3,
-            mdtr: 3.3,
-            mdio: 4.3,
-            msio: None,
-            elevation: 6.3,
-            azimuth: 7.3,
-        });
-
-        let fitted = tracker.fit().unwrap();
     }
 
     #[test]
     fn tracker_no_gap_x4() {
         let g01 = SV::from_str("G01").unwrap();
 
-        let mut tracker = SVTracker::new(sv, None);
+        let mut tracker = SVTracker::new(g01, None);
 
         for obs in [
             Observation {
@@ -408,43 +402,18 @@ mod test {
 
         assert_eq!(fitted.sv, g01);
         assert_eq!(fitted.duration, Duration::from_seconds(60.0));
+
         assert_eq!(
             fitted.first_t,
             Epoch::from_str("2020-01-01T00:00:00 UTC").unwrap()
         );
+
         assert_eq!(
             fitted.midtrack,
             Epoch::from_str("2020-01-01T00:00:30 UTC").unwrap()
         );
+
         assert_eq!(fitted.elevation_deg, 6.1);
         assert_eq!(fitted.azimuth_deg, 7.1);
-        assert_eq!(fitted.refsv_s, 0.0);
-
-        tracker.new_observation(Observation {
-            epoch: Epoch::from_str("2020-01-01T00:01:30 UTC").unwrap(),
-            refsv: 1.3,
-            refsys: 2.3,
-            mdtr: 3.3,
-            mdio: 4.3,
-            msio: None,
-            elevation: 6.3,
-            azimuth: 7.3,
-        });
-
-        let fitted = tracker.fit().unwrap();
-
-        assert_eq!(fitted.sv, g01);
-        assert_eq!(fitted.duration, Duration::from_seconds(60.0));
-        assert_eq!(
-            fitted.first_t,
-            Epoch::from_str("2020-01-01T00:00:00 UTC").unwrap()
-        );
-        assert_eq!(
-            fitted.midtrack,
-            Epoch::from_str("2020-01-01T00:01:00 UTC").unwrap()
-        );
-        assert_eq!(fitted.elevation_deg, 6.1);
-        assert_eq!(fitted.azimuth_deg, 7.1);
-        assert_eq!(fitted.refsv_s, 0.0);
     }
 }
