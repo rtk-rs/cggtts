@@ -292,14 +292,13 @@ impl SVTracker {
 
 #[cfg(test)]
 mod test {
-    use crate::prelude::{Duration, Epoch, FittedData, Observation, SVTracker, SV};
+    use crate::prelude::{Duration, Epoch, Observation, SVTracker, SV};
     use std::str::FromStr;
 
     #[test]
     fn tracker_no_gap_x3() {
         let g01 = SV::from_str("G01").unwrap();
-
-        let mut tracker = SVTracker::new(g01, None);
+        let mut tracker = SVTracker::new(g01);
 
         for obs in [
             Observation {
@@ -361,8 +360,7 @@ mod test {
     #[test]
     fn tracker_no_gap_x4() {
         let g01 = SV::from_str("G01").unwrap();
-
-        let mut tracker = SVTracker::new(g01, None);
+        let mut tracker = SVTracker::new(g01);
 
         for obs in [
             Observation {
@@ -419,5 +417,217 @@ mod test {
 
         assert_eq!(fitted.elevation_deg, 6.1);
         assert_eq!(fitted.azimuth_deg, 7.1);
+    }
+
+    #[test]
+    fn tracker_30s_15s_ok() {
+        let g01 = SV::from_str("G01").unwrap();
+        let dt_30s = Duration::from_str("30 s").unwrap();
+
+        let mut tracker = SVTracker::new(g01).with_gap_tolerance(dt_30s);
+
+        for obs in [
+            Observation {
+                epoch: Epoch::from_str("2020-01-01T00:00:00 UTC").unwrap(),
+                refsv: 1.0,
+                refsys: 2.0,
+                mdtr: 3.0,
+                mdio: 4.0,
+                msio: None,
+                elevation: 6.0,
+                azimuth: 7.0,
+            },
+            Observation {
+                epoch: Epoch::from_str("2020-01-01T00:00:15 UTC").unwrap(),
+                refsv: 1.1,
+                refsys: 2.1,
+                mdtr: 3.1,
+                mdio: 4.1,
+                msio: None,
+                elevation: 6.1,
+                azimuth: 7.1,
+            },
+            Observation {
+                epoch: Epoch::from_str("2020-01-01T00:00:30 UTC").unwrap(),
+                refsv: 1.1,
+                refsys: 2.1,
+                mdtr: 3.1,
+                mdio: 4.1,
+                msio: None,
+                elevation: 6.1,
+                azimuth: 7.1,
+            },
+            Observation {
+                epoch: Epoch::from_str("2020-01-01T00:00:45 UTC").unwrap(),
+                refsv: 1.1,
+                refsys: 2.1,
+                mdtr: 3.1,
+                mdio: 4.1,
+                msio: None,
+                elevation: 6.1,
+                azimuth: 7.1,
+            },
+        ] {
+            tracker.new_observation(obs);
+        }
+
+        assert!(tracker.fit().is_ok());
+    }
+
+    #[test]
+    fn tracker_30s_30s_ok() {
+        let g01 = SV::from_str("G01").unwrap();
+        let dt_30s = Duration::from_str("30 s").unwrap();
+
+        let mut tracker = SVTracker::new(g01).with_gap_tolerance(dt_30s);
+
+        for obs in [
+            Observation {
+                epoch: Epoch::from_str("2020-01-01T00:00:00 UTC").unwrap(),
+                refsv: 1.0,
+                refsys: 2.0,
+                mdtr: 3.0,
+                mdio: 4.0,
+                msio: None,
+                elevation: 6.0,
+                azimuth: 7.0,
+            },
+            Observation {
+                epoch: Epoch::from_str("2020-01-01T00:00:30 UTC").unwrap(),
+                refsv: 1.1,
+                refsys: 2.1,
+                mdtr: 3.1,
+                mdio: 4.1,
+                msio: None,
+                elevation: 6.1,
+                azimuth: 7.1,
+            },
+            Observation {
+                epoch: Epoch::from_str("2020-01-01T00:01:00 UTC").unwrap(),
+                refsv: 1.1,
+                refsys: 2.1,
+                mdtr: 3.1,
+                mdio: 4.1,
+                msio: None,
+                elevation: 6.1,
+                azimuth: 7.1,
+            },
+            Observation {
+                epoch: Epoch::from_str("2020-01-01T00:01:30 UTC").unwrap(),
+                refsv: 1.1,
+                refsys: 2.1,
+                mdtr: 3.1,
+                mdio: 4.1,
+                msio: None,
+                elevation: 6.1,
+                azimuth: 7.1,
+            },
+        ] {
+            tracker.new_observation(obs);
+        }
+
+        assert!(tracker.fit().is_ok());
+
+        for obs in [
+            Observation {
+                epoch: Epoch::from_str("2020-01-01T00:00:00 UTC").unwrap(),
+                refsv: 1.0,
+                refsys: 2.0,
+                mdtr: 3.0,
+                mdio: 4.0,
+                msio: None,
+                elevation: 6.0,
+                azimuth: 7.0,
+            },
+            Observation {
+                epoch: Epoch::from_str("2020-01-01T00:00:30 UTC").unwrap(),
+                refsv: 1.1,
+                refsys: 2.1,
+                mdtr: 3.1,
+                mdio: 4.1,
+                msio: None,
+                elevation: 6.1,
+                azimuth: 7.1,
+            },
+            Observation {
+                epoch: Epoch::from_str("2020-01-01T00:01:00 UTC").unwrap(),
+                refsv: 1.1,
+                refsys: 2.1,
+                mdtr: 3.1,
+                mdio: 4.1,
+                msio: None,
+                elevation: 6.1,
+                azimuth: 7.1,
+            },
+            Observation {
+                epoch: Epoch::from_str("2020-01-01T00:01:15 UTC").unwrap(),
+                refsv: 1.1,
+                refsys: 2.1,
+                mdtr: 3.1,
+                mdio: 4.1,
+                msio: None,
+                elevation: 6.1,
+                azimuth: 7.1,
+            },
+        ] {
+            tracker.new_observation(obs);
+        }
+
+        assert!(tracker.fit().is_ok());
+    }
+
+    #[test]
+    fn tracker_30s_nok() {
+        let g01 = SV::from_str("G01").unwrap();
+        let dt_30s = Duration::from_str("30 s").unwrap();
+
+        let mut tracker = SVTracker::new(g01).with_gap_tolerance(dt_30s);
+
+        for obs in [
+            Observation {
+                epoch: Epoch::from_str("2020-01-01T00:00:00 UTC").unwrap(),
+                refsv: 1.0,
+                refsys: 2.0,
+                mdtr: 3.0,
+                mdio: 4.0,
+                msio: None,
+                elevation: 6.0,
+                azimuth: 7.0,
+            },
+            Observation {
+                epoch: Epoch::from_str("2020-01-01T00:00:30 UTC").unwrap(),
+                refsv: 1.1,
+                refsys: 2.1,
+                mdtr: 3.1,
+                mdio: 4.1,
+                msio: None,
+                elevation: 6.1,
+                azimuth: 7.1,
+            },
+            Observation {
+                epoch: Epoch::from_str("2020-01-01T00:01:00 UTC").unwrap(),
+                refsv: 1.1,
+                refsys: 2.1,
+                mdtr: 3.1,
+                mdio: 4.1,
+                msio: None,
+                elevation: 6.1,
+                azimuth: 7.1,
+            },
+            Observation {
+                epoch: Epoch::from_str("2020-01-01T00:01:31 UTC").unwrap(),
+                refsv: 1.1,
+                refsys: 2.1,
+                mdtr: 3.1,
+                mdio: 4.1,
+                msio: None,
+                elevation: 6.1,
+                azimuth: 7.1,
+            },
+        ] {
+            tracker.new_observation(obs);
+        }
+
+        assert!(tracker.fit().is_err());
     }
 }
