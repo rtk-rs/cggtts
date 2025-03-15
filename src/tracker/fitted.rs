@@ -51,7 +51,8 @@ impl FittedData {
     /// For Glonass, it should be between 1-96 as the date of ephemeris as
     /// daily quarters of hours, starting at 1 for 00:00:00 midnight.
     /// For BeiDou, the hour of clock, between 0-23 should be used.
-    pub fn to_track(&self, class: CommonViewClass, data: u16) -> Track {
+    /// - rinex_code: RINEX code.
+    pub fn to_track(&self, class: CommonViewClass, data: u16, rinex_code: &str) -> Track {
         Track {
             class,
             epoch: self.first_t,
@@ -83,7 +84,7 @@ impl FittedData {
             },
             // TODO
             hc: 0,
-            frc: "C1C".to_string(), // TODO
+            frc: rinex_code.to_string(),
         }
     }
 }
