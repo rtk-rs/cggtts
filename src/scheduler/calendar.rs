@@ -182,7 +182,6 @@ impl CommonViewCalendar {
 
         let mjd_midnight = Epoch::from_mjd_utc(mjd as f64);
         let mjd_next_midnight = Epoch::from_mjd_utc((mjd + 1) as f64);
-        let time_to_midnight = mjd_next_midnight - mjd_midnight;
 
         // offset of first period of that day
         let offset_nanos = self.first_start_offset_nanos(mjd) as f64;

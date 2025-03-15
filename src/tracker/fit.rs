@@ -4,9 +4,7 @@ use log::debug;
 use polyfit_rs::polyfit_rs::polyfit;
 use thiserror::Error;
 
-use crate::prelude::{Duration, Epoch, FittedData, IonosphericData, TrackData, SV};
-
-use std::collections::BTreeMap;
+use crate::prelude::{Duration, Epoch, FittedData, SV};
 
 /// CGGTTS track formation errors
 #[derive(Debug, Clone, Error)]
@@ -59,20 +57,26 @@ pub struct Observation {
 }
 
 impl SVTracker {
-    /// Creates (allocates) a new [SVTracker] for that particular satellite.
+    /// Allocate a new [SVTracker] for that particular satellite.
     ///
     /// ## Input
-    /// - satellite: as [SV]
-    /// - tolerance: sampling gap tolerance as [Duration]
-    pub fn new(sv: SV, gap_tolerance: Option<Duration>) -> Self {
+    /// - satellite: [SV]
+    pub fn new(satellite: SV) -> Self {
         Self {
-            sv,
             size: 0,
             t0: None,
             prev_t: None,
-            gap_tolerance,
+            sv: satellite,
+            gap_tolerance: None,
             buffer: Vec::with_capacity(16),
         }
+    }
+
+    /// Define a new [SVTracker] with desired observation gap tolerance.
+    pub fn with_gap_tolerance(&self, tolerance: Duration) -> Self {
+        let mut s = self.clone();
+        s.gap_tolerance = Some(tolerance);
+        s
     }
 
     /// Feed new [Observation] at t [Epoch] of observation (sampling).
