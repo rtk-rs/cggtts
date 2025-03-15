@@ -154,8 +154,8 @@ impl SVTracker {
         fitted.azimuth_deg = azim_mid;
         fitted.elevation_deg = elev_mid;
 
-        // retrieve x_t
-        let x_t = self
+        // retrieve x_s
+        let x_s = self
             .buffer
             .iter()
             .map(|data| data.epoch.duration.to_unit(Unit::Second))
@@ -163,7 +163,7 @@ impl SVTracker {
 
         // REFSV
         let fit = polyfit(
-            &x_t,
+            &x_s,
             self.buffer
                 .iter()
                 .map(|data| data.refsv)
@@ -173,12 +173,12 @@ impl SVTracker {
         )
         .or(Err(FitError::LinearRegressionFailure))?;
 
-        let (srsv, srsv_b) = (fit[0], fit[1]);
+        let (srsv, srsv_b) = (fit[1], fit[0]);
         let refsv = srsv * t_mid_s + srsv_b;
 
         // REFSYS
         let fit = polyfit(
-            &x_t,
+            &x_s,
             self.buffer
                 .iter()
                 .map(|data| data.refsys)
@@ -188,7 +188,7 @@ impl SVTracker {
         )
         .or(Err(FitError::LinearRegressionFailure))?;
 
-        let (srsys, srsys_b) = (fit[0], fit[1]);
+        let (srsys, srsys_b) = (fit[1], fit[0]);
         let refsys_fit = srsys * t_mid_s + srsys_b;
 
         // DSG
@@ -201,7 +201,7 @@ impl SVTracker {
 
         // MDTR
         let fit = polyfit(
-            &x_t,
+            &x_s,
             self.buffer
                 .iter()
                 .map(|data| data.mdtr)
@@ -211,12 +211,12 @@ impl SVTracker {
         )
         .or(Err(FitError::LinearRegressionFailure))?;
 
-        let (smdt, smdt_b) = (fit[0], fit[1]);
+        let (smdt, smdt_b) = (fit[1], fit[0]);
         let mdtr = smdt * t_mid_s + smdt_b;
 
         // MDIO
         let fit = polyfit(
-            &x_t,
+            &x_s,
             self.buffer
                 .iter()
                 .map(|data| data.mdio)
@@ -226,7 +226,7 @@ impl SVTracker {
         )
         .or(Err(FitError::LinearRegressionFailure))?;
 
-        let (smdi, smdi_b) = (fit[0], fit[1]);
+        let (smdi, smdi_b) = (fit[1], fit[0]);
         let mdio = smdi * t_mid_s + smdi_b;
 
         // MSIO
@@ -245,9 +245,9 @@ impl SVTracker {
         let msio_len = msio.len();
 
         if msio_len > 0 {
-            let fit = polyfit(&x_t, &msio, 1).or(Err(FitError::LinearRegressionFailure))?;
+            let fit = polyfit(&x_s, &msio, 1).or(Err(FitError::LinearRegressionFailure))?;
 
-            let (smsi, smsi_b) = (fit[0], fit[1]);
+            let (smsi, smsi_b) = (fit[1], fit[0]);
             let msio_fit = smsi * t_mid_s + smsi_b;
 
             // ISG
