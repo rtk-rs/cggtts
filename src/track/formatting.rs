@@ -22,7 +22,9 @@ fn fmt_saturated_f64(nb: f64, scaling: f64, sat: i64, padding: usize) -> String 
 }
 
 impl Track {
-    pub(crate) fn format<W: Write>(
+    /// Format [Track] into mutable [BufWriter].
+    /// Requires a pre-allocated [Utf8Buffer].
+    pub fn format<W: Write>(
         &self,
         writer: &mut BufWriter<W>,
         buffer: &mut Utf8Buffer,

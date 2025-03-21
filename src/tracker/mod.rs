@@ -46,4 +46,19 @@ impl SkyTracker {
             self.trackers.insert(satellite, new);
         }
     }
+
+    /// Attempt new satellite track fitting.
+    /// ## Input
+    /// - satellite: [SV] that must have been tracked.
+    /// That tracking duration might have to respect external requirements.
+    /// ## Output
+    /// - fitted: [FittedData] that you can turn into a valid
+    /// CGGTTS track if you provide a little more information.
+    pub fn track_fit(&mut self, satellite: SV) -> Result<FittedData, FitError> {
+        if let Some(sv) = self.trackers.get_mut(&satellite) {
+            sv.fit()
+        } else {
+            Err(FitError::UnknownSatellite)
+        }
+    }
 }
