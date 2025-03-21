@@ -39,9 +39,9 @@ mod tracker;
 #[cfg(test)]
 mod tests;
 
+pub mod buffer;
 pub mod errors;
 pub mod track;
-pub mod buffer;
 
 #[cfg(feature = "serde")]
 #[macro_use]
