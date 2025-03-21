@@ -9,6 +9,9 @@ use crate::prelude::{Duration, Epoch, FittedData, SV};
 /// CGGTTS track formation errors
 #[derive(Debug, Clone, Error)]
 pub enum FitError {
+    /// Unknown satellite (not tracked at all)
+    #[error("unknown satellite (not tracked at all)")]
+    UnknownSatellite,
     /// At least two symbols are required to fit
     #[error("track fitting requires at least 3 observations")]
     NotEnoughSymbols,
