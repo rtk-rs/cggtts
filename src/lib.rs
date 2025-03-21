@@ -11,10 +11,6 @@
  * Documentation: https://github.com/rtk-rs/cggtts
  */
 
-// #[cfg(feature = "tracker")]
-// #[cfg_attr(docsrs, doc(cfg(feature = "tracker")))]
-// pub mod tracker;
-
 extern crate gnss_rs as gnss;
 
 use gnss::prelude::{Constellation, SV};
@@ -45,8 +41,7 @@ mod tests;
 
 pub mod errors;
 pub mod track;
-
-pub(crate) mod buffer;
+pub mod buffer;
 
 #[cfg(feature = "serde")]
 #[macro_use]
