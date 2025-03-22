@@ -5,7 +5,8 @@ pub use fit::{FitError, Observation, SVTracker};
 pub use fitted::FittedData;
 
 use crate::prelude::{Duration, SV};
-use std::collections::HashMap;
+
+use std::{collections::hash_map::Keys, collections::HashMap};
 
 /// [SkyTracker] is used to track all Satellite vehicles
 /// in sight during a common view period and eventually collect CGGTTS.
@@ -24,6 +25,11 @@ impl SkyTracker {
             trackers: HashMap::with_capacity(8),
             gap_tolerance: None,
         }
+    }
+
+    /// List of Satellites currently tracker
+    pub fn satellites(&self) -> Keys<'_, SV, SVTracker> {
+        self.trackers.keys()
     }
 
     /// Define a [SkyTracker] with desired observation gap tolerance.
