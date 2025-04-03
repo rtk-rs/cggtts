@@ -1,6 +1,6 @@
 [package]
 name = "cggtts"
-version = "4.2.0"
+version = "4.2.1"
 license = "MPL-2.0"
 authors = ["Guillaume W. Bres <guillaume.bressaix@gmail.com>"]
 description = "CGGTTS data parsing and synthesis"
@@ -13,6 +13,10 @@ readme = "../README.md"
 exclude = [
     "data/*",
 ]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docrs", "--generate-link-to-definition"]
 
 [features]
 default = [] # no features by default
@@ -41,7 +45,3 @@ hifitime = { version = "4.0", features = ["serde", "std"] }
 
 [dev-dependencies]
 rand = "0.8"
-
-[package.metadata.docs.rs]
-all-features = true
-rustdoc-args = ["--cfg", "docrs", "--generate-link-to-definition"]
