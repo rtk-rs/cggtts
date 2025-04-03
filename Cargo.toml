@@ -9,7 +9,7 @@ repository = "https://github.com/rtk-rs/cggtts"
 keywords = ["geo", "gnss", "timing", "gps"]
 categories = ["science", "science:geo", "parsing"]
 edition = "2018"
-readme = "../README.md"
+readme = "README.md"
 exclude = [
     "data/*",
 ]
