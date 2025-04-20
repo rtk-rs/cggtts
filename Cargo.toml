@@ -41,7 +41,7 @@ log = { version = "0.4", optional = true }
 polyfit-rs = { version = "0.2", optional = true }
 serde = { version = "1.0", optional = true, features = ["derive"] }
 
-gnss-rs = { git = "https://github.com/rtk-rs/gnss", branch = "dep/hifitime", features = ["serde"] }
+gnss-rs = { git = "https://github.com/rtk-rs/gnss", branch = "master", features = ["serde"] }
 hifitime = { git = "https://github.com/nyx-space/hifitime", branch = "master", features = ["serde", "std"] }
 
 [dev-dependencies]
