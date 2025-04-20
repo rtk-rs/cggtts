@@ -39,9 +39,10 @@ strum_macros = "0.27"
 flate2 = { version = "1", optional = true }
 log = { version = "0.4", optional = true }
 polyfit-rs = { version = "0.2", optional = true }
-gnss-rs = { version = "2.3.5", features = ["serde"] }
 serde = { version = "1.0", optional = true, features = ["derive"] }
-hifitime = { version = "4.0", features = ["serde", "std"] }
+
+gnss-rs = { git = "https://github.com/rtk-rs/gnss", branch = "dep/hifitime", features = ["serde"] }
+hifitime = { git = "https://github.com/nyx-space/hifitime", branch = "master", features = ["serde", "std"] }
 
 [dev-dependencies]
 rand = "0.8"
