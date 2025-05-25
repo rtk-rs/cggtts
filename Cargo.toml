@@ -1,6 +1,6 @@
 [package]
 name = "cggtts"
-version = "4.2.1"
+version = "4.3.0"
 license = "MPL-2.0"
 authors = ["Guillaume W. Bres <guillaume.bressaix@gmail.com>"]
 description = "CGGTTS data parsing and synthesis"
@@ -39,10 +39,9 @@ strum_macros = "0.27"
 flate2 = { version = "1", optional = true }
 log = { version = "0.4", optional = true }
 polyfit-rs = { version = "0.2", optional = true }
+gnss-rs = { version = "2.4.0", features = ["serde"] }
+hifitime = { version = "4.1.0", features = ["serde", "std"] }
 serde = { version = "1.0", optional = true, features = ["derive"] }
-
-gnss-rs = { git = "https://github.com/rtk-rs/gnss", branch = "main", features = ["serde"] }
-hifitime = { git = "https://github.com/nyx-space/hifitime", branch = "master", features = ["serde", "std"] }
 
 [dev-dependencies]
 rand = "0.8"
