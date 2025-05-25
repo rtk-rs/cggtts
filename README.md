@@ -8,6 +8,7 @@ Rust package to parse and generate CGGTTS data.
 [![crates.io](https://docs.rs/cggtts/badge.svg)](https://docs.rs/cggtts/)
 [![crates.io](https://img.shields.io/crates/d/cggtts.svg)](https://crates.io/crates/cggtts)
 
+[![MRSV](https://img.shields.io/badge/MSRV-1.82.0-orange?style=for-the-badge)](https://github.com/rust-lang/rust/releases/tag/1.82.0)
 [![License](https://img.shields.io/badge/license-MPL_2.0-orange?style=for-the-badge&logo=mozilla)](https://github.com/rtk-rs/sp3/blob/main/LICENSE)
 
 ## License

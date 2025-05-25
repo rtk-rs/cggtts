@@ -1,6 +1,6 @@
 [package]
 name = "cggtts"
-version = "4.2.1"
+version = "4.3.0"
 license = "MPL-2.0"
 authors = ["Guillaume W. Bres <guillaume.bressaix@gmail.com>"]
 description = "CGGTTS data parsing and synthesis"

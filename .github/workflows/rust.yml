@@ -21,19 +21,19 @@ jobs:
         submodules: recursive
         fetch-depth: 0
 
-    - uses: actions-rs/toolchain@v1
-      name: Install Rust 
-      with:
-        toolchain: stable
-        override: true
-        components: rustfmt, clippy 
-
     - uses: actions-rs/cargo@v1
       name: Linter 
       with:
         command: fmt
         args: --all -- --check
     
+    - uses: actions-rs/toolchain@v1
+      name: Install Rust 
+      with:
+        toolchain: 1.82.0
+        override: true
+        components: rustfmt, clippy 
+
     - uses: actions-rs/cargo@v1
       name: Build
       with:
